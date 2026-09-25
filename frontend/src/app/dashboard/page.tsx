@@ -11,8 +11,10 @@ import TenderCard, {
   getMatchCategory,
   getRiskCategory,
 } from "@/features/tender-card";
+import { API_BASE_URL } from "@/lib/auth";
+import cn from "@/utils/cn";
 
-const API_ENDPOINT = "https://fourloop-backend.robinrangi.com/api/tenders/top-assessments/";
+const API_ENDPOINT = `${API_BASE_URL}/api/tenders/top-assessments/`;
 
 export interface TenderDocumentItem {
   id?: string;
@@ -313,6 +315,15 @@ export default function Dashboard() {
   const [selectedId, setSelectedId] = React.useState<string | number>(SAMPLE_TENDERS[0].id);
   const [isLoading, setIsLoading] = React.useState<boolean>(true);
 
+  // Drafting State
+  const [draftingId, setDraftingId] = React.useState<string | number | null>(null);
+  const [draftStatus, setDraftStatus] = React.useState<{
+    id: string | number;
+    type: "success" | "error";
+    message: string;
+    pdfUrl?: string;
+  } | null>(null);
+
   React.useEffect(() => {
     fetchTenders()
       .then((data) => {
@@ -334,6 +345,73 @@ export default function Dashboard() {
   const currentRiskColor = getSmoothRiskColor(selectedTender.risk);
   const currentMatchCategory = getMatchCategory(selectedTender.match);
   const currentRiskCategory = getRiskCategory(selectedTender.risk);
+
+  const handleDraftProposal = async (tender: Tender) => {
+    if (draftingId) return;
+
+    setDraftingId(tender.id);
+    setDraftStatus(null);
+
+    try {
+      const draftUrl = `${API_BASE_URL}/api/tenders/${encodeURIComponent(String(tender.id))}/draft/`;
+      const res = await fetch(draftUrl, {
+        method: "GET",
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        let errorMsg = `Failed to generate draft (Status: ${res.status})`;
+        try {
+          const errData = await res.json();
+          if (errData?.error) errorMsg = errData.error;
+          else if (errData?.detail) errorMsg = errData.detail;
+        } catch {
+          // not JSON
+        }
+        throw new Error(errorMsg);
+      }
+
+      // Check Content-Disposition header for filename
+      const disposition = res.headers.get("Content-Disposition");
+      let filename = `tender_draft_${tender.id}.pdf`;
+      if (disposition && disposition.includes("filename=")) {
+        const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (match && match[1]) {
+          filename = match[1].replace(/['"]/g, "").trim();
+        }
+      }
+
+      const blob = await res.blob();
+      const pdfObjectUrl = window.URL.createObjectURL(blob);
+
+      // Trigger browser download
+      const link = document.createElement("a");
+      link.href = pdfObjectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      setDraftStatus({
+        id: tender.id,
+        type: "success",
+        message: `Proposal draft downloaded as "${filename}"`,
+        pdfUrl: pdfObjectUrl,
+      });
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to generate proposal draft. Please try again.";
+      setDraftStatus({
+        id: tender.id,
+        type: "error",
+        message,
+      });
+    } finally {
+      setDraftingId(null);
+    }
+  };
 
   return (
     <SessionGate mode="auth">
@@ -477,7 +555,7 @@ export default function Dashboard() {
               {selectedTender.documents && selectedTender.documents.length > 0 && (
                 <div className="mt-8">
                   <h2 className="border-b border-border/60 pb-2 text-xs font-semibold uppercase tracking-tight text-foreground">
-                    Attached Documents & Links ({selectedTender.documents.length})
+                    Attached Documents & Links
                   </h2>
                   <div className="mt-3 flex flex-col gap-2">
                     {selectedTender.documents.map((doc, idx) => (
@@ -517,12 +595,118 @@ export default function Dashboard() {
               )}
 
               {/* Actions Footer */}
-              <div className="flex flex-wrap items-center justify-between gap-3 border-border/60 pt-5">
-                <div className="flex items-center gap-2">
-                  <Button variant="login" size="sm" className="font-mono text-xs whitespace-nowrap shrink-0">
-                    Draft Proposal
-                  </Button>
+              <div className="mt-8 border-t border-border/60 pt-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <Button
+                      variant="login"
+                      size="sm"
+                      isLoading={draftingId === selectedTender.id}
+                      onClick={() => handleDraftProposal(selectedTender)}
+                      className="font-mono text-xs whitespace-nowrap shrink-0 transition-all hover:opacity-90 cursor-pointer"
+                      icon={
+                        <svg
+                          className="mr-1.5 h-3.5 w-3.5"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z"
+                          />
+                        </svg>
+                      }
+                    >
+                      {draftingId === selectedTender.id
+                        ? "Generating AI Draft..."
+                        : "Draft Proposal"}
+                    </Button>
+
+                    {draftStatus?.id === selectedTender.id &&
+                      draftStatus.type === "success" &&
+                      draftStatus.pdfUrl && (
+                        <a
+                          href={draftStatus.pdfUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-4xl border border-border bg-background px-3 py-1.5 font-mono text-xs font-medium text-foreground transition hover:border-foreground/30 hover:bg-lightgrey/30"
+                        >
+                          <svg
+                            className="h-3.5 w-3.5 text-foreground/60"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                            />
+                          </svg>
+                          View in Browser
+                        </a>
+                      )}
+                  </div>
                 </div>
+
+                {/* Draft Status Feedback Banner */}
+                {draftStatus?.id === selectedTender.id && (
+                  <div
+                    className={cn(
+                      "mt-3 flex items-center justify-between rounded-lg border p-3 text-xs transition-all",
+                      draftStatus.type === "success"
+                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700"
+                        : "border-red-500/30 bg-red-500/10 text-red-700"
+                    )}
+                  >
+                    <div className="flex items-center gap-2 font-mono">
+                      {draftStatus.type === "success" ? (
+                        <svg
+                          className="h-4 w-4 shrink-0 text-emerald-600"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M5 13l4 4L19 7"
+                          />
+                        </svg>
+                      ) : (
+                        <svg
+                          className="h-4 w-4 shrink-0 text-red-600"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                          />
+                        </svg>
+                      )}
+                      <span>{draftStatus.message}</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setDraftStatus(null)}
+                      className="ml-3 text-xs opacity-60 hover:opacity-100 cursor-pointer"
+                      aria-label="Dismiss message"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
