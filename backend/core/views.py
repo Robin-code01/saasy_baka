@@ -753,7 +753,6 @@ def get_tender_draft(request, ocid):
                     {"role": "system", "content": "You are a helpful bid writing assistant."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.7
             )
             markdown_draft = ai_response.choices[0].message.content
         except Exception as e:
