@@ -1,9 +1,11 @@
+// src/components/layout/landing-header/header.tsx
 "use client";
 
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { ProppyLogo } from "@/components/ui/logo";
 import {
   Dialog,
   DialogContent,
@@ -17,20 +19,15 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "https://fourloop-backend.robinrangi.com";
 
 export interface HeaderProps {
-  /** Placeholder or custom company name */
   companyName?: string;
-  /** Controlled signed-in state (optional) */
   isSignedIn?: boolean;
-  /** Callback fired when user clicks Sign In */
   onSignIn?: () => void;
-  /** Callback fired when user clicks Sign Out */
   onSignOut?: () => void;
-  /** Additional styling classes */
   className?: string;
 }
 
 export function Header({
-  companyName = "Company Name",
+  companyName = "Proppy",
   isSignedIn: controlledIsSignedIn,
   onSignIn,
   onSignOut,
@@ -78,7 +75,6 @@ export function Header({
         throw new Error(errorMsg);
       }
 
-      // Store auth token in storage if returned by the backend
       if (data?.token) {
         localStorage.setItem("authToken", data.token);
       } else if (data?.access) {
@@ -94,7 +90,6 @@ export function Header({
       setPassword("");
       onSignIn?.();
 
-      // Redirect user to the dashboard 
       router.push("/dashboard");
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -134,14 +129,15 @@ export function Header({
   return (
     <header
       className={cn(
-        "sticky top-0 z-50 w-full border-b border-border bg-background/90 backdrop-blur-md transition-colors",
+        "sticky top-0 z-50 w-full border-b border-border bg-background/80 backdrop-blur-md transition-colors",
         className,
       )}
     >
       <div className="relative mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        {/* Company Name */}
+        {/* Company Name & Logo */}
         <Link href="/" className="group flex items-center gap-2.5">
-          <span className="text-xl font-bold tracking-tight text-foreground">
+          <ProppyLogo />
+          <span className="text-xl font-bold tracking-tight text-foreground transition-colors group-hover:text-foreground/90">
             {companyName}
           </span>
         </Link>
