@@ -4,7 +4,7 @@ import { Header } from "@/components/layout/dashboard-header/header";
 export default function Dashboard() {
   return (
     <SessionGate mode="auth">
-      <Header companyName="some company" />
+      <Header companyName="Proppy" />
       <main className="grid bg-lightgrey h-[calc(100vh-64px)] w-full pt-10 grid-cols-6 gap-10 px-10">
         <div className="bg-lightgrey h-full col-span-2">
           <div className="bg-background px-8 py-3 rounded-2xl border-2 border-lightgrey-hover">

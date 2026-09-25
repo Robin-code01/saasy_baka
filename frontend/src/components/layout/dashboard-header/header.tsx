@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { ProppyLogo } from "@/components/ui/logo";
 import cn from "@/utils/cn";
 import {
   DropdownMenuContent,
@@ -60,6 +61,7 @@ export function Header({
       <div className="relative mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Stay on dashboard while logged in */}
         <Link href="/dashboard" className="group flex items-center gap-2.5">
+          <ProppyLogo />
           <span className="text-xl font-bold tracking-tight text-foreground">
             {companyName}
           </span>

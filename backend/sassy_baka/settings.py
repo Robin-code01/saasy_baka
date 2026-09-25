@@ -12,8 +12,17 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 
 from pathlib import Path
 
+import environ
+
+from core.prompts import TENDER_ASSESSMENT_PROMPT as DEFAULT_TENDER_ASSESSMENT_PROMPT
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# ``backend/.env`` is local-only (and gitignored). It lets development and
+# deployment environments provide secrets without adding them to source code.
+env = environ.Env()
+environ.Env.read_env(BASE_DIR / ".env")
 
 
 # Quick-start development settings - unsuitable for production
@@ -50,6 +59,14 @@ CORS_ALLOWED_ORIGINS = [
 ]
 CORS_ALLOW_CREDENTIALS = True
 
+# Testing only: authenticated REST API requests may use the session cookie
+# without an X-CSRFToken header. Do not use this setting in production.
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "core.authentication.CsrfExemptSessionAuthentication",
+    ),
+}
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -61,6 +78,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "corsheaders",
     "rest_framework",
+    "core.apps.CoreConfig",
 ]
 
 MIDDLEWARE = [
@@ -68,7 +86,6 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
-    "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -103,6 +120,30 @@ DATABASES = {
         "NAME": BASE_DIR / "db.sqlite3",
     }
 }
+
+# The tender crawler intentionally has its own SQLite database.  It contains
+# canonical active tenders plus crawler lifecycle state; do not point this at
+# Django's authentication database.
+TENDER_DATABASE_PATH = env.str(
+    "TENDER_DATABASE_PATH", default=str(BASE_DIR / "scraping" / "uk_open_tenders.db")
+)
+
+# Put the company's description and capabilities in this Markdown file (or set
+# TENDER_COMPANY_CONTEXT_PATH to the existing private file in the deployment).
+TENDER_COMPANY_CONTEXT_PATH = env.str(
+    "TENDER_COMPANY_CONTEXT_PATH",
+    default=str(BASE_DIR / "company_description_and_capabilities.md"),
+)
+
+OPENAI_API_KEY = env.str("OPENAI_API_KEY", default="")
+OPENAI_TENDER_MODEL = env.str("OPENAI_TENDER_MODEL", default="gpt-4o-mini")
+TENDER_ASSESSMENT_FAKE_MODE = env.bool("TENDER_ASSESSMENT_FAKE_MODE", default=False)
+TENDER_ASSESSMENT_PROMPT_VERSION = env.str(
+    "TENDER_ASSESSMENT_PROMPT_VERSION", default="2026-09-26"
+)
+TENDER_ASSESSMENT_PROMPT = env.str(
+    "TENDER_ASSESSMENT_PROMPT", default=DEFAULT_TENDER_ASSESSMENT_PROMPT
+)
 
 
 # Password validation
