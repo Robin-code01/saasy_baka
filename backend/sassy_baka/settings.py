@@ -25,8 +25,14 @@ SECRET_KEY = "django-insecure-lc7@$w6cwchwcnlq98llm(=*(0!mh(6-x=4=2tw%rul(jl1qt4
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    "fourloop-backend.robinrangi.com",
+    "localhost",
+]
 
+CSRF_TRUSTED_ORIGINS = [
+    "https://fourloop-backend.robinrangi.com",  # scheme required, Django 4+
+]
 
 # Application definition
 
