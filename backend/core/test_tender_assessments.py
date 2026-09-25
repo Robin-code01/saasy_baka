@@ -300,13 +300,14 @@ class AssessActiveTendersTests(TestCase):
         connection.execute(
             """
             INSERT INTO tenders (
-                ocid, title, description, tender_status, suitability_json, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?)
+                ocid, title, description, closing_date, tender_status, suitability_json, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "ocds-second-active",
                 "Second current opportunity",
                 "A second active source tender.",
+                "2026-04-01T00:00:00+00:00",
                 "active",
                 "{}",
                 "2026-01-02T00:00:00+00:00",
@@ -324,7 +325,9 @@ class AssessActiveTendersTests(TestCase):
             "company_context_sha256": "a" * 64,
         }
         TenderAssessment.objects.create(
-            ocid="ocds-active", recommendation_rating=80, risk_rating=20, **assessment_defaults
+            # This has a better score but no closing date, so the future
+            # deadline of the next tender must take priority.
+            ocid="ocds-active", recommendation_rating=99, risk_rating=1, **assessment_defaults
         )
         TenderAssessment.objects.create(
             ocid="ocds-second-active", recommendation_rating=80, risk_rating=10,

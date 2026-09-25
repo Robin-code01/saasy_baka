@@ -10,7 +10,6 @@ import hashlib
 import json
 import os
 import sqlite3
-from itertools import islice
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -246,6 +245,25 @@ def _load_active_tenders_by_ocid(
         """
         tenders.extend(dict(row) for row in connection.execute(query, batch).fetchall())
     return _add_tender_children(connection, tenders)
+
+
+def _load_active_tender_closing_dates(
+    connection: sqlite3.Connection, ocids: list[str]
+) -> dict[str, str | None]:
+    """Return only the active-tender metadata needed to rank stored results."""
+    closing_dates: dict[str, str | None] = {}
+    for start in range(0, len(ocids), TENDER_LOOKUP_CHUNK_SIZE):
+        batch = ocids[start:start + TENDER_LOOKUP_CHUNK_SIZE]
+        placeholders = ", ".join("?" for _ in batch)
+        query = f"""
+            SELECT ocid, closing_date
+            FROM tenders
+            WHERE tender_status = 'active' AND ocid IN ({placeholders})
+        """
+        closing_dates.update(
+            {row["ocid"]: row["closing_date"] for row in connection.execute(query, batch)}
+        )
+    return closing_dates
 
 
 def _is_still_active(connection: sqlite3.Connection, ocid: str) -> bool:
@@ -549,12 +567,11 @@ def assess_live_trial_tenders(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def get_top_assessed_tenders(request):
-    """Return the highest-rated assessments whose source tender is still active.
+    """Return the best stored assessments with details loaded by their OCIDs.
 
-    Assessment records remain in Django's ``db.sqlite3`` for audit purposes,
-    even after the source tender closes. This endpoint re-checks the separate
-    crawler database, so the frontend never receives a historic inactive
-    tender merely because it has a stored assessment.
+    Ratings and risk are read from Django's ``db.sqlite3``. The crawler
+    database is queried only after that, to restrict results to canonical
+    active tenders, rank them by closing date, and provide tender details.
     """
     limit = request.data.get("limit", 10)
     try:
@@ -576,37 +593,41 @@ def get_top_assessed_tenders(request):
         return Response({"error": str(exc)}, status=503)
 
     try:
-        results: list[dict[str, Any]] = []
-        # Recommendation is the primary ordering. A lower risk rating, newer
-        # assessment and OCID provide deterministic tie-breakers.
-        ranked_assessments = TenderAssessment.objects.order_by(
-            "-recommendation_rating", "risk_rating", "-assessed_at", "ocid"
-        ).iterator(chunk_size=TENDER_LOOKUP_CHUNK_SIZE)
+        assessments = list(TenderAssessment.objects.all())
+        closing_dates = _load_active_tender_closing_dates(
+            connection, [assessment.ocid for assessment in assessments]
+        )
+        candidates = [
+            (assessment, closing_dates[assessment.ocid])
+            for assessment in assessments
+            if assessment.ocid in closing_dates
+        ]
 
-        while len(results) < limit:
-            assessment_batch = list(islice(ranked_assessments, TENDER_LOOKUP_CHUNK_SIZE))
-            if not assessment_batch:
-                break
-            active_tenders = _load_active_tenders_by_ocid(
-                connection, [assessment.ocid for assessment in assessment_batch]
-            )
-            tenders_by_ocid = {tender["ocid"]: tender for tender in active_tenders}
+        # Python's stable sort lets us apply deterministic priorities without
+        # comparing the two separate SQLite databases in one SQL statement.
+        # The source emits ISO-8601 closing dates, so descending text order is
+        # chronological. Missing closing dates are always ranked last.
+        candidates.sort(key=lambda item: item[0].ocid)
+        candidates.sort(key=lambda item: item[0].assessed_at, reverse=True)
+        candidates.sort(key=lambda item: item[0].risk_rating)
+        candidates.sort(key=lambda item: item[0].recommendation_rating, reverse=True)
+        candidates.sort(key=lambda item: (item[1] is not None, item[1] or ""), reverse=True)
 
-            for assessment in assessment_batch:
-                tender = tenders_by_ocid.get(assessment.ocid)
-                if tender is None:
-                    # A closed/cancelled source record may retain its old
-                    # assessment in db.sqlite3, but is never returned here.
-                    continue
-                results.append(
-                    {
-                        "ocid": assessment.ocid,
-                        "tender": tender,
-                        "assessment": _serialise_assessment(assessment),
-                    }
-                )
-                if len(results) == limit:
-                    break
+        selected_candidates = candidates[:limit]
+        selected_tenders = _load_active_tenders_by_ocid(
+            connection, [assessment.ocid for assessment, _ in selected_candidates]
+        )
+        tenders_by_ocid = {tender["ocid"]: tender for tender in selected_tenders}
+        results = [
+            {
+                "ocid": assessment.ocid,
+                "tender": tenders_by_ocid[assessment.ocid],
+                "assessment": _serialise_assessment(assessment),
+            }
+            for assessment, _ in selected_candidates
+            # The crawler can close a tender between ranking and full lookup.
+            if assessment.ocid in tenders_by_ocid
+        ]
     except sqlite3.DatabaseError:
         return Response(
             {
@@ -629,7 +650,10 @@ def get_top_assessed_tenders(request):
         {
             "requested": limit,
             "returned": len(results),
-            "ranking": "recommendation_rating descending, risk_rating ascending",
+            "ranking": (
+                "closing_date descending, recommendation_rating descending, "
+                "risk_rating ascending"
+            ),
             "results": results,
         }
     )
