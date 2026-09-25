@@ -12,4 +12,9 @@ urlpatterns = [
         views.assess_live_trial_tenders,
         name="assess_live_trial_tenders",
     ),
+    path(
+        "tenders/top-assessments/",
+        views.get_top_assessed_tenders,
+        name="get_top_assessed_tenders",
+    ),
 ]

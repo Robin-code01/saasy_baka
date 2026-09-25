@@ -22,7 +22,8 @@ create a duplicate because a notice was amended or republished.
 | Django model | `backend/core/models.py` | Ratings, narrative, model/prompt metadata, content hash, and timestamps. |
 | Prompt | `backend/core/prompts.py` | Versioned UK public-sector bid/no-bid instructions. |
 | Standard endpoint | `POST /api/tenders/assess-active/` | Authenticated endpoint that performs an assessment. |
-| Live trial endpoint | `POST /api/tenders/assess-live-trial/` | Hard-capped real-API assessment of the newest 100 active tenders. |
+| Live trial endpoint | `POST /api/tenders/assess-live-trial/` | Real-API assessment of 1–100 active tenders with the latest closing dates. |
+| Results endpoint | `POST /api/tenders/top-assessments/` | Frontend-ready top-rated results from `db.sqlite3`, rechecked against active source tenders. |
 
 The assessment table uses OCID as its primary key. It has no cross-database
 foreign key because Django's app database and the crawler database are separate.
@@ -182,7 +183,7 @@ are text before storing the result. This follows the intended use of Structured
 Outputs, which constrains the response to the supplied schema; see the
 [official Structured Outputs guide](https://developers.openai.com/api/docs/guides/structured-outputs).
 
-### Capped live trial: newest 100 active tenders
+### Capped live trial: up to 100 active tenders
 
 For the first real business test, set a valid `OPENAI_API_KEY` and ensure this
 is in `backend/.env`:
@@ -211,10 +212,11 @@ curl -b cookies.txt -X POST \
 
 The limit must be an integer from 1 to 100; omitting it selects 100. This
 endpoint cannot be configured to exceed 100 tenders. It queries only canonical
-rows where `tender_status = 'active'`, orders them by
-the latest source `published_date` descending (with missing dates last), and
-then sends one tender per OpenAI request. If fewer than 100 current active rows
-exist, it stops naturally after the available number. It rejects fake mode with
+rows where `tender_status = 'active'`, orders them by the latest/furthest
+`closing_date` descending (with missing dates last), and then sends one tender
+per OpenAI request. Publication date resolves any closing-date tie. If fewer
+than 100 current active rows exist, it stops naturally after the available
+number. It rejects fake mode with
 HTTP 409, so a successful trial always uses the configured OpenAI API key.
 
 Expect the request to remain open while up to 100 sequential assessments run.
@@ -227,6 +229,27 @@ The endpoint upserts each returned result into `tender_assessments` by OCID.
 The OpenAI API can enforce request and token rate limits, so allow time for up
 to 100 sequential calls and inspect the returned `failures` map before relying
 on the results. [OpenAI rate-limit guidance](https://developers.openai.com/api/docs/guides/rate-limits)
+
+## Fetching top assessed tenders for the frontend
+
+Use the authenticated POST endpoint below to obtain the requested number of
+best current opportunities. It ranks by `recommendation_rating` descending,
+then `risk_rating` ascending. It reads assessment records from Django's
+`db.sqlite3`, but rechecks each OCID against the crawler database's canonical
+active `tenders` table. Stored assessments for closed or cancelled tenders are
+therefore not returned.
+
+```bash
+curl -b cookies.txt -X POST http://127.0.0.1:8000/api/tenders/top-assessments/ \
+  -H 'Content-Type: application/json' \
+  -d '{"limit": 20}'
+```
+
+`limit` defaults to 10 and accepts 1–1000. Each item has an `ocid`, a complete
+current `tender` object (including all source-table columns, CPV codes,
+locations and documents), and an `assessment` object with every field stored in
+`tender_assessments`. The raw OCDS source JSON is included when present in the
+source database.
 
 ## Prompt and audit fields
 

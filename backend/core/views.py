@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import sqlite3
+from itertools import islice
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -57,6 +58,8 @@ TENDER_ASSESSMENT_SCHEMA = {
 }
 
 LIVE_TRIAL_TENDER_LIMIT = 100
+TOP_ASSESSMENT_MAX_LIMIT = 1000
+TENDER_LOOKUP_CHUNK_SIZE = 900
 
 
 class _LocalFakeResponses:
@@ -128,25 +131,10 @@ def _read_company_context() -> str:
     return context
 
 
-def _load_active_tenders(connection: sqlite3.Connection, limit: int | None) -> list[dict[str, Any]]:
-    """Load only canonical, currently-active tender rows and their match inputs."""
-    query = """
-        SELECT
-            ocid, title, description, buyer_name, buyer_id, published_date,
-            closing_date, procurement_method, procedure_type, value_amount,
-            value_currency, suitability_json, source_url, updated_at
-        FROM tenders
-        WHERE tender_status = 'active'
-        -- published_date is the latest source release publication/edit date.
-        -- Keep null dates last, then choose the most recently published tender.
-        ORDER BY published_date IS NULL, published_date DESC, updated_at DESC, ocid ASC
-    """
-    params: tuple[int, ...] = ()
-    if limit is not None:
-        query += " LIMIT ?"
-        params = (limit,)
-
-    tenders = [dict(row) for row in connection.execute(query, params).fetchall()]
+def _add_tender_children(
+    connection: sqlite3.Connection, tenders: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Add all related source records to tender dictionaries in SQLite-safe batches."""
     for tender in tenders:
         tender["cpv_codes"] = []
         tender["locations"] = []
@@ -155,15 +143,13 @@ def _load_active_tenders(connection: sqlite3.Connection, limit: int | None) -> l
         # Convert the source's JSON text to an object where possible, without
         # treating malformed/missing source metadata as a matching failure.
         try:
-            tender["suitability"] = json.loads(tender.pop("suitability_json"))
+            tender["suitability"] = json.loads(tender.get("suitability_json"))
         except (TypeError, json.JSONDecodeError):
             tender["suitability"] = None
 
     # SQLite has a bound-parameter limit, so child rows are fetched in chunks.
-    # This is still a handful of queries for the full catalogue, rather than
-    # three queries per tender.
-    for start in range(0, len(tenders), 900):
-        batch = tenders[start:start + 900]
+    for start in range(0, len(tenders), TENDER_LOOKUP_CHUNK_SIZE):
+        batch = tenders[start:start + TENDER_LOOKUP_CHUNK_SIZE]
         placeholders = ", ".join("?" for _ in batch)
         records_by_ocid = {tender["ocid"]: tender for tender in batch}
         ocids = tuple(records_by_ocid)
@@ -204,6 +190,46 @@ def _load_active_tenders(connection: sqlite3.Connection, limit: int | None) -> l
                 records_by_ocid[row["ocid"]][key].append(item)
 
     return tenders
+
+
+def _load_active_tenders(connection: sqlite3.Connection, limit: int | None) -> list[dict[str, Any]]:
+    """Load active tenders for assessment, prioritising the latest closing date."""
+    query = """
+        SELECT
+            ocid, title, description, buyer_name, buyer_id, published_date,
+            closing_date, procurement_method, procedure_type, value_amount,
+            value_currency, suitability_json, source_url, updated_at
+        FROM tenders
+        WHERE tender_status = 'active'
+        -- Assess tenders with the furthest/latest closing date first. Source
+        -- publication date resolves ties; missing closing dates always last.
+        ORDER BY closing_date IS NULL, closing_date DESC, published_date DESC,
+                 updated_at DESC, ocid ASC
+    """
+    params: tuple[int, ...] = ()
+    if limit is not None:
+        query += " LIMIT ?"
+        params = (limit,)
+
+    tenders = [dict(row) for row in connection.execute(query, params).fetchall()]
+    return _add_tender_children(connection, tenders)
+
+
+def _load_active_tenders_by_ocid(
+    connection: sqlite3.Connection, ocids: list[str]
+) -> list[dict[str, Any]]:
+    """Load every current source field for specified OCIDs, excluding inactive rows."""
+    tenders: list[dict[str, Any]] = []
+    for start in range(0, len(ocids), TENDER_LOOKUP_CHUNK_SIZE):
+        batch = ocids[start:start + TENDER_LOOKUP_CHUNK_SIZE]
+        placeholders = ", ".join("?" for _ in batch)
+        query = f"""
+            SELECT *
+            FROM tenders
+            WHERE tender_status = 'active' AND ocid IN ({placeholders})
+        """
+        tenders.extend(dict(row) for row in connection.execute(query, batch).fetchall())
+    return _add_tender_children(connection, tenders)
 
 
 def _is_still_active(connection: sqlite3.Connection, ocid: str) -> bool:
@@ -306,6 +332,24 @@ def _save_assessment(
     )
 
 
+def _serialise_assessment(assessment: TenderAssessment) -> dict[str, Any]:
+    """Return every application-owned assessment field in a JSON-safe form."""
+    return {
+        "ocid": assessment.ocid,
+        "risk_rating": assessment.risk_rating,
+        "risks": assessment.risks,
+        "fit_reasoning": assessment.fit_reasoning,
+        "recommendation_rating": assessment.recommendation_rating,
+        "assessment_json": assessment.assessment_json,
+        "model_name": assessment.model_name,
+        "prompt_version": assessment.prompt_version,
+        "company_context_sha256": assessment.company_context_sha256,
+        "tender_updated_at": assessment.tender_updated_at,
+        "created_at": assessment.created_at.isoformat(),
+        "assessed_at": assessment.assessed_at.isoformat(),
+    }
+
+
 # Create your views here.
 @api_view(['POST'])
 @authentication_classes([])
@@ -365,7 +409,7 @@ def get_profile(request):
 
 
 def _assess_selected_active_tenders(limit: int | None) -> Response:
-    """Assess the newest active source tenders, up to an optional hard limit."""
+    """Assess active source tenders with the latest closing dates first."""
     try:
         company_context = _read_company_context()
         connection = _open_tender_database()
@@ -450,7 +494,7 @@ def assess_active_tenders(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def assess_live_trial_tenders(request):
-    """Run 1--100 newest active tenders against the real OpenAI API.
+    """Run 1--100 active tenders with the latest closing dates against OpenAI.
 
     The optional request ``limit`` makes smaller paid tests practical while
     preserving an absolute upper bound of 100 model submissions.
@@ -473,3 +517,83 @@ def assess_live_trial_tenders(request):
     if not 1 <= limit <= LIVE_TRIAL_TENDER_LIMIT:
         return Response({"error": "limit must be an integer from 1 to 100"}, status=400)
     return _assess_selected_active_tenders(limit)
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def get_top_assessed_tenders(request):
+    """Return the highest-rated assessments whose source tender is still active.
+
+    Assessment records remain in Django's ``db.sqlite3`` for audit purposes,
+    even after the source tender closes. This endpoint re-checks the separate
+    crawler database, so the frontend never receives a historic inactive
+    tender merely because it has a stored assessment.
+    """
+    limit = request.data.get("limit", 10)
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        return Response(
+            {"error": f"limit must be an integer from 1 to {TOP_ASSESSMENT_MAX_LIMIT}"},
+            status=400,
+        )
+    if not 1 <= limit <= TOP_ASSESSMENT_MAX_LIMIT:
+        return Response(
+            {"error": f"limit must be an integer from 1 to {TOP_ASSESSMENT_MAX_LIMIT}"},
+            status=400,
+        )
+
+    try:
+        connection = _open_tender_database()
+    except ImproperlyConfigured as exc:
+        return Response({"error": str(exc)}, status=503)
+
+    try:
+        results: list[dict[str, Any]] = []
+        # Recommendation is the primary ordering. A lower risk rating, newer
+        # assessment and OCID provide deterministic tie-breakers.
+        ranked_assessments = TenderAssessment.objects.order_by(
+            "-recommendation_rating", "risk_rating", "-assessed_at", "ocid"
+        ).iterator(chunk_size=TENDER_LOOKUP_CHUNK_SIZE)
+
+        while len(results) < limit:
+            assessment_batch = list(islice(ranked_assessments, TENDER_LOOKUP_CHUNK_SIZE))
+            if not assessment_batch:
+                break
+            active_tenders = _load_active_tenders_by_ocid(
+                connection, [assessment.ocid for assessment in assessment_batch]
+            )
+            tenders_by_ocid = {tender["ocid"]: tender for tender in active_tenders}
+
+            for assessment in assessment_batch:
+                tender = tenders_by_ocid.get(assessment.ocid)
+                if tender is None:
+                    # A closed/cancelled source record may retain its old
+                    # assessment in db.sqlite3, but is never returned here.
+                    continue
+                results.append(
+                    {
+                        "ocid": assessment.ocid,
+                        "tender": tender,
+                        "assessment": _serialise_assessment(assessment),
+                    }
+                )
+                if len(results) == limit:
+                    break
+    except (OperationalError, ProgrammingError):
+        return Response(
+            {"error": "Assessment storage is unavailable. Run: python manage.py migrate"},
+            status=503,
+        )
+    finally:
+        connection.close()
+
+    return Response(
+        {
+            "requested": limit,
+            "returned": len(results),
+            "ranking": "recommendation_rating descending, risk_rating ascending",
+            "results": results,
+        }
+    )

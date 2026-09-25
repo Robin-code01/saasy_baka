@@ -10,7 +10,12 @@ from django.test import TestCase, override_settings
 from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
 from core.models import TenderAssessment
-from core.views import _load_active_tenders, assess_active_tenders, assess_live_trial_tenders
+from core.views import (
+    _load_active_tenders,
+    assess_active_tenders,
+    assess_live_trial_tenders,
+    get_top_assessed_tenders,
+)
 
 
 class AssessActiveTendersTests(TestCase):
@@ -250,34 +255,36 @@ class AssessActiveTendersTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data["error"], "limit must be an integer from 1 to 100")
 
-    def test_active_tenders_are_ordered_by_latest_source_publication_date(self):
+    def test_active_tenders_are_ordered_by_latest_closing_date(self):
         connection = sqlite3.connect(self.tender_database_path)
         connection.row_factory = sqlite3.Row
         connection.executemany(
             """
             INSERT INTO tenders (
-                ocid, title, description, published_date, tender_status,
+                ocid, title, description, published_date, closing_date, tender_status,
                 suitability_json, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
-                    "ocds-old-active",
-                    "Older current tender",
-                    "Older source release.",
-                    "2026-01-01T00:00:00+00:00",
+                    "ocds-earlier-close",
+                    "Earlier-closing tender",
+                    "This closes first despite a newer publication date.",
+                    "2026-02-01T00:00:00+00:00",
+                    "2026-03-01T12:00:00+00:00",
                     "active",
                     "{}",
-                    "2026-01-01T00:00:00+00:00",
+                    "2026-02-01T00:00:00+00:00",
                 ),
                 (
-                    "ocds-new-active",
-                    "Newest current tender",
-                    "Newest source release.",
-                    "2026-02-01T00:00:00+00:00",
+                    "ocds-later-close",
+                    "Later-closing tender",
+                    "This closes later despite an older publication date.",
+                    "2026-01-01T00:00:00+00:00",
+                    "2026-04-01T12:00:00+00:00",
                     "active",
                     "{}",
-                    "2026-02-01T00:00:00+00:00",
+                    "2026-01-01T00:00:00+00:00",
                 ),
             ],
         )
@@ -286,7 +293,67 @@ class AssessActiveTendersTests(TestCase):
         tenders = _load_active_tenders(connection, limit=1)
         connection.close()
 
-        self.assertEqual(tenders[0]["ocid"], "ocds-new-active")
+        self.assertEqual(tenders[0]["ocid"], "ocds-later-close")
+
+    def test_top_assessments_returns_full_active_tenders_in_rating_order(self):
+        connection = sqlite3.connect(self.tender_database_path)
+        connection.execute(
+            """
+            INSERT INTO tenders (
+                ocid, title, description, tender_status, suitability_json, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "ocds-second-active",
+                "Second current opportunity",
+                "A second active source tender.",
+                "active",
+                "{}",
+                "2026-01-02T00:00:00+00:00",
+            ),
+        )
+        connection.commit()
+        connection.close()
+
+        assessment_defaults = {
+            "risks": "A test risk.",
+            "fit_reasoning": "A test fit reason.",
+            "assessment_json": {"test": True},
+            "model_name": "test-model",
+            "prompt_version": "test-1",
+            "company_context_sha256": "a" * 64,
+        }
+        TenderAssessment.objects.create(
+            ocid="ocds-active", recommendation_rating=80, risk_rating=20, **assessment_defaults
+        )
+        TenderAssessment.objects.create(
+            ocid="ocds-second-active", recommendation_rating=80, risk_rating=10,
+            **assessment_defaults,
+        )
+        # A higher-scoring historic record exists in db.sqlite3, but must not
+        # escape to the frontend because its source tender is inactive.
+        TenderAssessment.objects.create(
+            ocid="ocds-inactive", recommendation_rating=100, risk_rating=1,
+            **assessment_defaults,
+        )
+
+        request = self.factory.post("/api/tenders/top-assessments/", {"limit": 10}, format="json")
+        force_authenticate(request, user=self.user)
+
+        response = get_top_assessed_tenders(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["requested"], 10)
+        self.assertEqual(response.data["returned"], 2)
+        self.assertEqual(
+            [entry["ocid"] for entry in response.data["results"]],
+            ["ocds-second-active", "ocds-active"],
+        )
+        first_result = response.data["results"][0]
+        self.assertIn("tender_status", first_result["tender"])
+        self.assertIn("suitability_json", first_result["tender"])
+        self.assertIn("assessment_json", first_result["assessment"])
+        self.assertIn("assessed_at", first_result["assessment"])
 
     @override_settings(TENDER_ASSESSMENT_FAKE_MODE=True)
     def test_live_trial_rejects_fake_mode(self):
