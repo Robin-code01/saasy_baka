@@ -42,7 +42,7 @@ ALLOWED_HOSTS = [
 
 CSRF_TRUSTED_ORIGINS = [
     "https://fourloop-backend.robinrangi.com",
-    "http://fourloop.robinrangi.com",
+    "https://fourloop.robinrangi.com",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:5173",
@@ -51,7 +51,7 @@ CSRF_TRUSTED_ORIGINS = [
 
 CORS_ALLOWED_ORIGINS = [
     "https://fourloop-backend.robinrangi.com",
-    "http://fourloop.robinrangi.com",
+    "https://fourloop.robinrangi.com",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:5173",

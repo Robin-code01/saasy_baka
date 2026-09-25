@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 """HTTP views for the application.
 
 The tender matcher deliberately talks to the crawler's SQLite database rather
@@ -18,9 +19,12 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.exceptions import ImproperlyConfigured
 from django.db import OperationalError, ProgrammingError
+=======
+from django.shortcuts import render
+from django.contrib.auth.models import User
+>>>>>>> bc418c94093507b56b6ca9739943f4eb96bf5653
 from django.contrib.auth import authenticate, login, logout
-from django.views.decorators.csrf import csrf_exempt
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
@@ -306,8 +310,8 @@ def _save_assessment(
 
 
 # Create your views here.
-@csrf_exempt
 @api_view(['POST'])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def register_user(request):
     username = request.data.get('username')
@@ -328,8 +332,8 @@ def register_user(request):
         'username': user.username
     }, status=201)
 
-@csrf_exempt
 @api_view(['POST'])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def login_user(request):
     username = request.data.get('username')
@@ -345,16 +349,14 @@ def login_user(request):
     else:
         return Response({'error': 'Invalid username or password'}, status=400)
 
-@csrf_exempt
-@api_view(['POST'])                                                                                                                                     
-@permission_classes([IsAuthenticated])                                                                                                                  
-def logout_user(request):                                                                                                                                                                                                                                                         
-    logout(request)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def logout_user(request):
+    logout(request)
     return Response({'message': 'User logged out successfully!'}, status=200)
 
-@csrf_exempt
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])                                                                                                                  
+@permission_classes([IsAuthenticated])
 def get_profile(request):
     user = request.user
     return Response({
