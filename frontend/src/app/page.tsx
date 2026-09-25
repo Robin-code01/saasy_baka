@@ -318,13 +318,13 @@ export default function Home() {
               <div className="border-border/60">
                 <dt className="text-xs text-foreground/60">Quick Info</dt>
                 <dd className="mt-1 font-mono text-xs font-medium text-foreground">
-                  Discover the important details of each tender at a single glance.
+                  Discover the important details of each tender at a single glance. No sifting through pages of fluff.
                 </dd>
               </div>
               <div className="border-border/60">
                 <dt className="text-xs text-foreground/60">Draft</dt>
                 <dd className="mt-1 text-xs font-mono font-medium text-foreground">
-                  Create a drafted proposal at the click of a button..
+                  Create a drafted proposal for your application at the click of a button.
                 </dd>
               </div>
             </dl>
