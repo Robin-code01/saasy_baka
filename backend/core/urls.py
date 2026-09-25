@@ -17,4 +17,9 @@ urlpatterns = [
         views.get_top_assessed_tenders,
         name="get_top_assessed_tenders",
     ),
+    path(
+        "tenders/<str:ocid>/draft/",
+        views.get_tender_draft,
+        name="get_tender_draft",
+    ),
 ]

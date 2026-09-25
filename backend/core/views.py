@@ -99,10 +99,26 @@ class _LocalFakeResponses:
         )
 
 
+class _LocalFakeChatCompletions:
+    def create(self, **kwargs: Any) -> SimpleNamespace:
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content="## Fake AI Draft Proposal\n\nThis is a mocked draft proposal generated locally without calling the actual OpenAI API."
+                    )
+                )
+            ]
+        )
+
+class _LocalFakeChat:
+    completions = _LocalFakeChatCompletions()
+
 class _LocalFakeOpenAIClient:
     """Matches the small part of the OpenAI client interface used by this view."""
 
     responses = _LocalFakeResponses()
+    chat = _LocalFakeChat()
 
 
 def _assessment_model_name() -> str:
@@ -676,3 +692,111 @@ def get_top_assessed_tenders(request):
             "results": results,
         }
     )
+
+import markdown
+from xhtml2pdf import pisa
+from io import BytesIO
+from django.http import HttpResponse
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_tender_draft(request, ocid):
+    """Generate and return a PDF draft proposal for a specific tender using AI."""
+    try:
+        connection = _open_tender_database()
+        company_context = _read_company_context()
+    except ImproperlyConfigured as exc:
+        return Response({"error": str(exc)}, status=503)
+
+    try:
+        tenders = _load_active_tenders_by_ocid(connection, [ocid])
+        if not tenders:
+            return Response({"error": "Tender not found or inactive"}, status=404)
+        
+        tender = tenders[0]
+        
+        # Try to get assessment if it exists
+        assessment = None
+        try:
+            assessment = TenderAssessment.objects.get(ocid=ocid)
+        except TenderAssessment.DoesNotExist:
+            pass
+
+        try:
+            client = _get_openai_client()
+        except ImproperlyConfigured as exc:
+            return Response({"error": str(exc)}, status=503)
+            
+        # Build prompt
+        prompt = (
+            "You are an expert bid writer. Create a professional draft proposal for the following tender. "
+            "Use the company context, the tender information, and the AI assessment risks and fit reasoning provided below. "
+            "Format the proposal clearly in Markdown.\n\n"
+            "Company description and capabilities:\n"
+            f"{company_context}\n\n"
+            "Tender Details:\n"
+            f"Title: {tender.get('title')}\n"
+            f"Buyer: {tender.get('buyer_name')}\n"
+            f"Description: {tender.get('description')}\n\n"
+        )
+        if assessment:
+            prompt += (
+                "AI Assessment:\n"
+                f"Risks: {assessment.risks}\n"
+                f"Fit Reasoning: {assessment.fit_reasoning}\n"
+            )
+
+        try:
+            ai_response = client.chat.completions.create(
+                model=_assessment_model_name(),
+                messages=[
+                    {"role": "system", "content": "You are a helpful bid writing assistant."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7
+            )
+            markdown_draft = ai_response.choices[0].message.content
+        except Exception as e:
+            return Response({"error": f"AI generation failed: {str(e)}"}, status=500)
+        
+        # Add a title at the top
+        final_markdown = f"# Draft Proposal for {tender.get('title')}\n\n{markdown_draft}"
+        
+        # Convert Markdown to HTML
+        html_content = markdown.markdown(final_markdown, extensions=['tables', 'fenced_code'])
+        
+        # Add basic CSS for PDF
+        styled_html = f"""
+        <html>
+        <head>
+        <style>
+            body {{ font-family: Helvetica, Arial, sans-serif; font-size: 12px; }}
+            h1 {{ font-size: 24px; color: #333; }}
+            h2 {{ font-size: 18px; color: #444; border-bottom: 1px solid #ddd; padding-bottom: 5px; }}
+            p {{ margin-bottom: 10px; line-height: 1.5; }}
+            ul, ol {{ margin-bottom: 10px; margin-left: 20px; }}
+        </style>
+        </head>
+        <body>
+        {html_content}
+        </body>
+        </html>
+        """
+        
+        # Convert HTML to PDF
+        pdf_buffer = BytesIO()
+        pisa_status = pisa.CreatePDF(styled_html, dest=pdf_buffer)
+        
+        if pisa_status.err:
+            return Response({"error": "Failed to generate PDF"}, status=500)
+            
+        pdf_buffer.seek(0)
+        
+        response = HttpResponse(pdf_buffer.read(), content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="tender_draft_{ocid}.pdf"'
+        return response
+        
+    except sqlite3.DatabaseError:
+        return Response({"error": "Tender source database is unreadable."}, status=503)
+    finally:
+        connection.close()
