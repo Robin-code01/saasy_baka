@@ -81,7 +81,7 @@ export function Header({
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-lightgrey text-xs font-semibold text-foreground">
                   U
                 </span>
-                <span className="max-w-[150px] truncate text-xs font-medium">
+                <span className="max-w-37.5 truncate text-xs font-medium">
                   user@example.com
                 </span>
               </div>
