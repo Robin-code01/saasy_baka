@@ -19,10 +19,7 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.exceptions import ImproperlyConfigured
 from django.db import OperationalError, ProgrammingError
-=======
-from django.shortcuts import render
-from django.contrib.auth.models import User
->>>>>>> bc418c94093507b56b6ca9739943f4eb96bf5653
+
 from django.contrib.auth import authenticate, login, logout
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
