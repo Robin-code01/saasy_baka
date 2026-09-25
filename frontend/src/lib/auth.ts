@@ -1,3 +1,4 @@
+// src/lib/auth.ts
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "https://fourloop-backend.robinrangi.com";
 
@@ -10,12 +11,17 @@ export type AuthUser = {
 
 /** Save the user returned by /api/login/ so the frontend can gate routes. */
 export function saveSession(user: AuthUser) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+  if (typeof window !== "undefined") {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+  }
 }
 
 /** Read the session stored at login. Returns null if logged out / missing. */
 export function getSession(): AuthUser | null {
   try {
+    if (typeof window === "undefined") {
+      return null;
+    }
     const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) {
       return null;
@@ -38,10 +44,48 @@ export function getSession(): AuthUser | null {
 }
 
 export function clearSession() {
-  localStorage.removeItem(SESSION_KEY);
-  localStorage.removeItem("authToken");
-  localStorage.removeItem("accessToken");
-  localStorage.removeItem("username");
+  if (typeof window !== "undefined") {
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("username");
+  }
+}
+
+/** Fetch user profile from backend as fallback if session is missing or needs refresh */
+export async function getCurrentUser(): Promise<AuthUser | null> {
+  const cached = getSession();
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/profile/`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+    if (
+      typeof data?.user_id === "number" &&
+      typeof data?.username === "string"
+    ) {
+      const user: AuthUser = { user_id: data.user_id, username: data.username };
+      saveSession(user);
+      return user;
+    }
+  } catch {
+    // Ignore network errors
+  }
+
+  return null;
 }
 
 export async function logoutSession(): Promise<void> {

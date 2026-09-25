@@ -14,21 +14,15 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import cn from "@/utils/cn";
-import { API_BASE_URL, clearSession, saveSession } from "@/lib/auth";
+import { API_BASE_URL, saveSession } from "@/lib/auth";
 
 export interface HeaderProps {
   companyName?: string;
-  isSignedIn?: boolean;
-  onSignIn?: () => void;
-  onSignOut?: () => void;
   className?: string;
 }
 
 export function Header({
   companyName = "Proppy",
-  isSignedIn: controlledIsSignedIn,
-  onSignIn,
-  onSignOut,
   className,
 }: HeaderProps) {
   const router = useRouter();
@@ -39,11 +33,6 @@ export function Header({
   const [password, setPassword] = React.useState("");
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-
-  // Support both uncontrolled and controlled signed-in state
-  const [internalIsSignedIn, setInternalIsSignedIn] = React.useState(false);
-  const isControlled = controlledIsSignedIn !== undefined;
-  const signedIn = isControlled ? controlledIsSignedIn : internalIsSignedIn;
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,19 +68,13 @@ export function Header({
         localStorage.setItem("accessToken", data.access);
       }
 
-      // Persist login response so route gates work without a session-fetch API
       if (typeof data?.user_id === "number" && typeof data?.username === "string") {
         saveSession({ user_id: data.user_id, username: data.username });
-      }
-
-      if (!isControlled) {
-        setInternalIsSignedIn(true);
       }
 
       setIsDialogOpen(false);
       setUsername("");
       setPassword("");
-      onSignIn?.();
 
       router.push("/dashboard");
     } catch (err: unknown) {
@@ -102,29 +85,6 @@ export function Header({
       }
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleSignOut = async () => {
-    try {
-      await fetch(`${API_BASE_URL}/api/logout/`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-      });
-    } catch (err) {
-      console.error("Sign out failed:", err);
-    } finally {
-      clearSession();
-
-      if (!isControlled) {
-        setInternalIsSignedIn(false);
-      }
-
-      onSignOut?.();
-      router.push("/");
     }
   };
 
@@ -144,107 +104,89 @@ export function Header({
           </span>
         </Link>
 
-        {/* Auth Button */}
+        {/* Guest Auth Action */}
         <div className="flex items-center gap-3">
-          {signedIn ? (
-            <div className="flex items-center gap-3">
-              <div className="hidden items-center gap-2 text-sm text-foreground/80 sm:flex">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-lightgrey text-xs font-semibold text-foreground">
-                  U
-                </span>
-              </div>
+          <Dialog
+            open={isDialogOpen}
+            onOpenChange={(open: boolean) => {
+              setIsDialogOpen(open);
+              if (!open) {
+                setError(null);
+              }
+            }}
+          >
+            <DialogTrigger asChild>
               <Button
-                variant="outline"
+                variant="login"
                 size="sm"
-                onClick={handleSignOut}
-                className="hover:bg-lightgrey transition-colors"
+                className="hover:opacity-90 transition-opacity"
               >
-                Sign Out
+                Sign In
               </Button>
-            </div>
-          ) : (
-            <Dialog
-              open={isDialogOpen}
-              onOpenChange={(open: boolean) => {
-                setIsDialogOpen(open);
-                if (!open) {
-                  setError(null);
-                }
-              }}
-            >
-              <DialogTrigger asChild>
+            </DialogTrigger>
+            <DialogContent className="w-full max-w-sm">
+              <DialogTitle>Sign In</DialogTitle>
+              <DialogDescription className="text-center mt-1">
+                Enter your credentials to access your account.
+              </DialogDescription>
+
+              <form onSubmit={handleSignIn} className="mt-4 flex flex-col gap-4">
+                {error && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 p-2.5 text-center text-xs text-red-600">
+                    {error}
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-1.5 text-left">
+                  <label
+                    htmlFor="username"
+                    className="text-xs font-medium text-foreground"
+                  >
+                    Username
+                  </label>
+                  <input
+                    id="username"
+                    name="username"
+                    type="text"
+                    required
+                    autoComplete="username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="Username"
+                    className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-foreground"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5 text-left">
+                  <label
+                    htmlFor="password"
+                    className="text-xs font-medium text-foreground"
+                  >
+                    Password
+                  </label>
+                  <input
+                    id="password"
+                    name="password"
+                    type="password"
+                    required
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-foreground"
+                  />
+                </div>
+
                 <Button
-                  variant="login"
-                  size="sm"
-                  className="hover:opacity-90 transition-opacity"
+                  type="submit"
+                  isLoading={isLoading}
+                  className="mt-2 w-full"
                 >
                   Sign In
                 </Button>
-              </DialogTrigger>
-              <DialogContent className="w-full max-w-sm">
-                <DialogTitle>Sign In</DialogTitle>
-                <DialogDescription className="text-center mt-1">
-                  Enter your credentials to access your account.
-                </DialogDescription>
-
-                <form onSubmit={handleSignIn} className="mt-4 flex flex-col gap-4">
-                  {error && (
-                    <div className="rounded-lg border border-red-200 bg-red-50 p-2.5 text-center text-xs text-red-600">
-                      {error}
-                    </div>
-                  )}
-
-                  <div className="flex flex-col gap-1.5 text-left">
-                    <label
-                      htmlFor="username"
-                      className="text-xs font-medium text-foreground"
-                    >
-                      Username
-                    </label>
-                    <input
-                      id="username"
-                      name="username"
-                      type="text"
-                      required
-                      autoComplete="username"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      placeholder="Username"
-                      className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-foreground"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5 text-left">
-                    <label
-                      htmlFor="password"
-                      className="text-xs font-medium text-foreground"
-                    >
-                      Password
-                    </label>
-                    <input
-                      id="password"
-                      name="password"
-                      type="password"
-                      required
-                      autoComplete="current-password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-foreground"
-                    />
-                  </div>
-
-                  <Button
-                    type="submit"
-                    isLoading={isLoading}
-                    className="mt-2 w-full"
-                  >
-                    Sign In
-                  </Button>
-                </form>
-              </DialogContent>
-            </Dialog>
-          )}
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
     </header>
