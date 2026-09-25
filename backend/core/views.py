@@ -23,6 +23,7 @@ from django.contrib.auth import authenticate, login, logout
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
+from django.views.decorators.csrf import csrf_exempt
 
 from .models import TenderAssessment
 
