@@ -355,6 +355,18 @@ class AssessActiveTendersTests(TestCase):
         self.assertIn("assessment_json", first_result["assessment"])
         self.assertIn("assessed_at", first_result["assessment"])
 
+    def test_top_assessments_reports_an_invalid_source_database_cleanly(self):
+        invalid_database_path = Path(self.temporary_directory.name) / "not-a-database.db"
+        invalid_database_path.write_text("this is not SQLite", encoding="utf-8")
+        request = self.factory.post("/api/tenders/top-assessments/", {"limit": 1}, format="json")
+        force_authenticate(request, user=self.user)
+
+        with override_settings(TENDER_DATABASE_PATH=invalid_database_path):
+            response = get_top_assessed_tenders(request)
+
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("not a readable crawler SQLite database", response.data["error"])
+
     @override_settings(TENDER_ASSESSMENT_FAKE_MODE=True)
     def test_live_trial_rejects_fake_mode(self):
         request = self.factory.post("/api/tenders/assess-live-trial/", {}, format="json")

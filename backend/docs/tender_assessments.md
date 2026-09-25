@@ -290,6 +290,7 @@ environment, but update the version label at the same time.
 | --- | --- |
 | `OPENAI_API_KEY is not configured` | Add the key to `backend/.env`, or enable fake mode for a no-key test, then restart Django. |
 | `AuthenticationError` / `401 invalid_api_key` | The configured key is invalid, revoked or incorrectly copied. Create or select an active project API key in OpenAI, replace the single `OPENAI_API_KEY=` value without spaces, and restart Django. Reducing the tender limit cannot resolve an authentication failure. |
+| `Tender database is not a readable crawler SQLite database` | `TENDER_DATABASE_PATH` points to the wrong file, or the crawler file is incomplete/corrupt. Confirm it is the crawler's `scraping/uk_open_tenders.db` file, then restore it or re-run the crawler. |
 | `Assessment storage is unavailable` | Run `python manage.py migrate` from `backend`. |
 | Company Markdown cannot be read | Correct `TENDER_COMPANY_CONTEXT_PATH` or restore the default profile file. |
 | `selected_active_tenders: 0` | The source contains no current active rows. Do not use historical lifecycle data to compensate. |

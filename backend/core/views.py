@@ -109,9 +109,25 @@ def _open_tender_database() -> sqlite3.Connection:
 
     connection = sqlite3.connect(database_path)
     connection.row_factory = sqlite3.Row
-    # This keeps AI assessments tied to a real, active tender even if the
-    # crawler removes a tender while an assessment job is running.
-    connection.execute("PRAGMA foreign_keys = ON")
+    try:
+        # sqlite3.connect() succeeds even for arbitrary files. Validate the
+        # database and canonical source table here, before an endpoint starts
+        # doing work and can otherwise fail with an unhelpful Django 500.
+        connection.execute("PRAGMA schema_version").fetchone()
+        has_tenders_table = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tenders'"
+        ).fetchone()
+        if has_tenders_table is None:
+            raise sqlite3.DatabaseError("the canonical 'tenders' table is missing")
+        # This keeps AI assessments tied to a real, active tender even if the
+        # crawler removes a tender while an assessment job is running.
+        connection.execute("PRAGMA foreign_keys = ON")
+    except sqlite3.DatabaseError as exc:
+        connection.close()
+        raise ImproperlyConfigured(
+            "Tender database is not a readable crawler SQLite database: "
+            f"{database_path}. Verify TENDER_DATABASE_PATH and restore or re-run the crawler."
+        ) from exc
     return connection
 
 
@@ -470,6 +486,16 @@ def _assess_selected_active_tenders(limit: int | None) -> Response:
             "assessments": assessments,
             "failures": failures,
         })
+    except sqlite3.DatabaseError:
+        return Response(
+            {
+                "error": (
+                    "Tender source database became unreadable. Verify "
+                    "TENDER_DATABASE_PATH and re-run or restore the crawler database."
+                )
+            },
+            status=503,
+        )
     finally:
         connection.close()
 
@@ -581,6 +607,16 @@ def get_top_assessed_tenders(request):
                 )
                 if len(results) == limit:
                     break
+    except sqlite3.DatabaseError:
+        return Response(
+            {
+                "error": (
+                    "Tender source database is unreadable. Verify "
+                    "TENDER_DATABASE_PATH and re-run or restore the crawler database."
+                )
+            },
+            status=503,
+        )
     except (OperationalError, ProgrammingError):
         return Response(
             {"error": "Assessment storage is unavailable. Run: python manage.py migrate"},
