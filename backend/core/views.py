@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 """HTTP views for the application.
 
 The tender matcher deliberately talks to the crawler's SQLite database rather
