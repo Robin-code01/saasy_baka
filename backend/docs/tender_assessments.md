@@ -233,11 +233,11 @@ on the results. [OpenAI rate-limit guidance](https://developers.openai.com/api/d
 ## Fetching top assessed tenders for the frontend
 
 Use the authenticated POST endpoint below to obtain the requested number of
-best current opportunities. It ranks by `recommendation_rating` descending,
-then `risk_rating` ascending. It reads assessment records from Django's
-`db.sqlite3`, but rechecks each OCID against the crawler database's canonical
-active `tenders` table. Stored assessments for closed or cancelled tenders are
-therefore not returned.
+best current opportunities. It reads recommendation and risk values from
+Django's `db.sqlite3`, uses those OCIDs to retrieve the active tender records
+from the crawler database, and ranks candidates by `closing_date` descending,
+then `recommendation_rating` descending, then `risk_rating` ascending. Stored
+assessments for closed or cancelled tenders are therefore not returned.
 
 ```bash
 curl -b cookies.txt -X POST http://127.0.0.1:8000/api/tenders/top-assessments/ \
