@@ -7,7 +7,49 @@ export default function Dashboard() {
     <SessionGate mode="auth">
       <Header companyName="Proppy" />
       <main className="grid bg-lightgrey h-[calc(100vh-64px)] w-full pt-10 grid-cols-6 gap-10 px-30">
-        <div className="bg-lightgrey h-full col-span-2">
+        <div className="bg-lightgrey h-full col-span-2 overflow-y-auto custom-scrollbar">
+          <TenderCard
+            title="Lorem ipsum gor gaonga ganrgo npogra og regraenoe rngoao arengoaemoa"
+            value={200000}
+            date="26/9/2026"
+            match={70}
+            risk={20}
+          ></TenderCard>
+          <TenderCard
+            title="Lorem ipsum gor gaonga ganrgo npogra og regraenoe rngoao arengoaemoa"
+            value={200000}
+            date="26/9/2026"
+            match={70}
+            risk={20}
+          ></TenderCard>
+          <TenderCard
+            title="Lorem ipsum gor gaonga ganrgo npogra og regraenoe rngoao arengoaemoa"
+            value={200000}
+            date="26/9/2026"
+            match={70}
+            risk={20}
+          ></TenderCard>
+          <TenderCard
+            title="Lorem ipsum gor gaonga ganrgo npogra og regraenoe rngoao arengoaemoa"
+            value={200000}
+            date="26/9/2026"
+            match={70}
+            risk={20}
+          ></TenderCard>
+          <TenderCard
+            title="Lorem ipsum gor gaonga ganrgo npogra og regraenoe rngoao arengoaemoa"
+            value={200000}
+            date="26/9/2026"
+            match={70}
+            risk={20}
+          ></TenderCard>
+          <TenderCard
+            title="Lorem ipsum gor gaonga ganrgo npogra og regraenoe rngoao arengoaemoa"
+            value={200000}
+            date="26/9/2026"
+            match={70}
+            risk={20}
+          ></TenderCard>
           <TenderCard
             title="Lorem ipsum gor gaonga ganrgo npogra og regraenoe rngoao arengoaemoa"
             value={200000}
