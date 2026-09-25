@@ -1,6 +1,7 @@
 import json
 import sqlite3
 import tempfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -296,22 +297,41 @@ class AssessActiveTendersTests(TestCase):
         self.assertEqual(tenders[0]["ocid"], "ocds-later-close")
 
     def test_top_assessments_returns_full_active_tenders_in_rating_order(self):
+        now = datetime.now(timezone.utc)
+        nearer_future = (now + timedelta(days=5)).isoformat()
+        later_future = (now + timedelta(days=20)).isoformat()
+        past_closing_date = (now - timedelta(days=1)).isoformat()
         connection = sqlite3.connect(self.tender_database_path)
         connection.execute(
+            "UPDATE tenders SET closing_date = ? WHERE ocid = 'ocds-active'",
+            (nearer_future,),
+        )
+        connection.executemany(
             """
             INSERT INTO tenders (
                 ocid, title, description, closing_date, tender_status, suitability_json, updated_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (
-                "ocds-second-active",
-                "Second current opportunity",
-                "A second active source tender.",
-                "2026-04-01T00:00:00+00:00",
-                "active",
-                "{}",
-                "2026-01-02T00:00:00+00:00",
-            ),
+            [
+                (
+                    "ocds-second-active",
+                    "Second current opportunity",
+                    "A second active source tender.",
+                    later_future,
+                    "active",
+                    "{}",
+                    "2026-01-02T00:00:00+00:00",
+                ),
+                (
+                    "ocds-past-active",
+                    "Past-deadline opportunity",
+                    "This active source row has already passed its deadline.",
+                    past_closing_date,
+                    "active",
+                    "{}",
+                    "2026-01-02T00:00:00+00:00",
+                ),
+            ],
         )
         connection.commit()
         connection.close()
@@ -325,8 +345,8 @@ class AssessActiveTendersTests(TestCase):
             "company_context_sha256": "a" * 64,
         }
         TenderAssessment.objects.create(
-            # This has a better score but no closing date, so the future
-            # deadline of the next tender must take priority.
+            # This higher recommendation must outrank a tender that closes
+            # later; both dates are still in the future.
             ocid="ocds-active", recommendation_rating=99, risk_rating=1, **assessment_defaults
         )
         TenderAssessment.objects.create(
@@ -337,6 +357,10 @@ class AssessActiveTendersTests(TestCase):
         # escape to the frontend because its source tender is inactive.
         TenderAssessment.objects.create(
             ocid="ocds-inactive", recommendation_rating=100, risk_rating=1,
+            **assessment_defaults,
+        )
+        TenderAssessment.objects.create(
+            ocid="ocds-past-active", recommendation_rating=100, risk_rating=1,
             **assessment_defaults,
         )
 
@@ -350,7 +374,7 @@ class AssessActiveTendersTests(TestCase):
         self.assertEqual(response.data["returned"], 2)
         self.assertEqual(
             [entry["ocid"] for entry in response.data["results"]],
-            ["ocds-second-active", "ocds-active"],
+            ["ocds-active", "ocds-second-active"],
         )
         first_result = response.data["results"][0]
         self.assertIn("tender_status", first_result["tender"])

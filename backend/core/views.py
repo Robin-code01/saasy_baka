@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -59,6 +60,19 @@ TENDER_ASSESSMENT_SCHEMA = {
 LIVE_TRIAL_TENDER_LIMIT = 100
 TOP_ASSESSMENT_MAX_LIMIT = 1000
 TENDER_LOOKUP_CHUNK_SIZE = 900
+
+
+def _future_closing_date(value: str | None, now: datetime) -> datetime | None:
+    """Parse an ISO-8601 closing date and return it only when still future."""
+    if not value:
+        return None
+    try:
+        closing_date = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if closing_date.tzinfo is None:
+        closing_date = closing_date.replace(tzinfo=timezone.utc)
+    return closing_date if closing_date > now else None
 
 
 class _LocalFakeResponses:
@@ -571,7 +585,7 @@ def get_top_assessed_tenders(request):
 
     Ratings and risk are read from Django's ``db.sqlite3``. The crawler
     database is queried only after that, to restrict results to canonical
-    active tenders, rank them by closing date, and provide tender details.
+    active tenders with future closing dates, and provide tender details.
     """
     limit = request.data.get("limit", 10)
     try:
@@ -597,21 +611,26 @@ def get_top_assessed_tenders(request):
         closing_dates = _load_active_tender_closing_dates(
             connection, [assessment.ocid for assessment in assessments]
         )
+        now = datetime.now(timezone.utc)
         candidates = [
-            (assessment, closing_dates[assessment.ocid])
+            (assessment, closing_date)
             for assessment in assessments
-            if assessment.ocid in closing_dates
+            if (
+                assessment.ocid in closing_dates
+                and (closing_date := _future_closing_date(closing_dates[assessment.ocid], now))
+                is not None
+            )
         ]
 
         # Python's stable sort lets us apply deterministic priorities without
         # comparing the two separate SQLite databases in one SQL statement.
-        # The source emits ISO-8601 closing dates, so descending text order is
-        # chronological. Missing closing dates are always ranked last.
+        # Recommendation is the primary decision signal. Dates are an
+        # eligibility requirement and only the third tie-breaker.
         candidates.sort(key=lambda item: item[0].ocid)
         candidates.sort(key=lambda item: item[0].assessed_at, reverse=True)
+        candidates.sort(key=lambda item: item[1], reverse=True)
         candidates.sort(key=lambda item: item[0].risk_rating)
         candidates.sort(key=lambda item: item[0].recommendation_rating, reverse=True)
-        candidates.sort(key=lambda item: (item[1] is not None, item[1] or ""), reverse=True)
 
         selected_candidates = candidates[:limit]
         selected_tenders = _load_active_tenders_by_ocid(
@@ -651,8 +670,8 @@ def get_top_assessed_tenders(request):
             "requested": limit,
             "returned": len(results),
             "ranking": (
-                "closing_date descending, recommendation_rating descending, "
-                "risk_rating ascending"
+                "recommendation_rating descending, risk_rating ascending, "
+                "closing_date descending (future dates only)"
             ),
             "results": results,
         }
