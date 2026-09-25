@@ -1,9 +1,7 @@
 # Generic UK construction company: description and capabilities
 
-> This is a fictional, generic profile for exercising the tender-assessment
-> service. It is not a statement about a real company, does not prove any
-> accreditation or capacity, and must be replaced with approved, evidenced
-> company information before using assessments to support real bid decisions.
+Company Name: Balls Builders
+Website: BallsBuilders.com
 
 ## Company overview
 
