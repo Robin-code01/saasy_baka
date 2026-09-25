@@ -28,11 +28,27 @@ DEBUG = True
 ALLOWED_HOSTS = [
     "fourloop-backend.robinrangi.com",
     "localhost",
+    "127.0.0.1",
 ]
 
 CSRF_TRUSTED_ORIGINS = [
-    "https://fourloop-backend.robinrangi.com",  # scheme required, Django 4+
+    "https://fourloop-backend.robinrangi.com",
+    "http://fourloop.robinrangi.com",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
 ]
+
+CORS_ALLOWED_ORIGINS = [
+    "https://fourloop-backend.robinrangi.com",
+    "http://fourloop.robinrangi.com",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+CORS_ALLOW_CREDENTIALS = True
 
 # Application definition
 
@@ -43,12 +59,14 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "corsheaders",
     "rest_framework",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
