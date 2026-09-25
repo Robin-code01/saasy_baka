@@ -12,9 +12,6 @@ import TenderCard, {
   getRiskCategory,
 } from "@/features/tender-card";
 
-// =========================================================================
-// 1. SIMPLE CONNECTION CONFIG (Edit this endpoint or the mapper below)
-// =========================================================================
 const API_ENDPOINT = "https://fourloop-backend.robinrangi.com/api/tenders/top-assessments/";
 
 export interface Tender {
@@ -30,7 +27,6 @@ export interface Tender {
   documentUrl?: string;
 }
 
-// Fallback items if the backend endpoint is offline or empty
 const SAMPLE_TENDERS: Tender[] = [
   {
     id: "sample-1",
@@ -75,7 +71,6 @@ async function fetchTenders(): Promise<Tender[]> {
   if (!res.ok) throw new Error("Failed to fetch");
   const data = await res.json();
 
-  // Maps backend format (data.results) into simple Tender items:
   return (data.results || []).map((item: any) => ({
     id: item.ocid || item.id,
     title: item.tender?.title || item.title || "Untitled Tender",
@@ -90,9 +85,6 @@ async function fetchTenders(): Promise<Tender[]> {
   }));
 }
 
-// =========================================================================
-// 2. CANVAS BACKGROUND
-// =========================================================================
 function InteractiveBackground() {
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const mouseRef = React.useRef<{ x: number; y: number; active: boolean }>({
@@ -230,9 +222,6 @@ function InteractiveBackground() {
   );
 }
 
-// =========================================================================
-// 3. MAIN DASHBOARD COMPONENT
-// =========================================================================
 export default function Dashboard() {
   const [tenders, setTenders] = React.useState<Tender[]>(SAMPLE_TENDERS);
   const [selectedId, setSelectedId] = React.useState<string | number>(SAMPLE_TENDERS[0].id);
@@ -268,7 +257,6 @@ export default function Dashboard() {
 
       <main className="relative z-10 mx-auto flex h-[calc(100vh-64px)] w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
         <div className="grid h-full grid-cols-1 gap-6 overflow-hidden lg:grid-cols-12">
-          {/* Left Column: Tenders Feed */}
           <div className="flex h-full min-h-0 flex-col lg:col-span-5">
             <div className="mb-3 flex items-center justify-between border-b border-border pb-3">
               <span className="text-xs font-semibold uppercase tracking-tight text-foreground">
@@ -295,7 +283,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Right Column: Tender Detail Panel */}
           <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-background/85 shadow-xs backdrop-blur-md lg:col-span-7">
             <div className="custom-scrollbar flex-1 overflow-y-auto p-6 sm:p-8">
               {/* Title */}
@@ -304,8 +291,6 @@ export default function Dashboard() {
                   {selectedTender.title}
                 </h1>
               </div>
-
-              {/* 1. Basic Specification (Value & Deadline only - No duplicate ratings) */}
               <div className="mt-6 rounded-xl border border-border bg-background p-5">
                 <dl className="grid grid-cols-2 gap-6 text-sm">
                   <div>
@@ -324,9 +309,7 @@ export default function Dashboard() {
                 </dl>
               </div>
 
-              {/* 2. Evaluation Section: Bars paired with Reasoning */}
               <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {/* Compatibility Card */}
                 <div className="flex flex-col rounded-xl border border-border bg-background p-5">
                   <div className="flex items-center justify-between text-xs font-mono">
                     <span className="font-semibold uppercase tracking-wider text-foreground">
@@ -357,7 +340,6 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* Risk Card */}
                 <div className="flex flex-col rounded-xl border border-border bg-background p-5">
                   <div className="flex items-center justify-between text-xs font-mono">
                     <span className="font-semibold uppercase tracking-wider text-foreground">
@@ -389,7 +371,6 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Description Section */}
               <div className="mt-8">
                 <h2 className="border-b border-border/60 pb-2 text-xs font-semibold uppercase tracking-tight text-foreground">
                   Description & Scope of Work
@@ -399,7 +380,6 @@ export default function Dashboard() {
                 </p>
               </div>
 
-              {/* Action Bar */}
               <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-5">
                 <div className="flex items-center gap-2">
                   {selectedTender.documentUrl && (
