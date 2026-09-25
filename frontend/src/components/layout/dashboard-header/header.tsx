@@ -4,6 +4,13 @@ import * as React from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import cn from "@/utils/cn";
+import {
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRoot,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown";
 
 export interface HeaderProps {
   /** Placeholder or custom company name */
@@ -61,36 +68,18 @@ export function Header({
 
         {/* Auth Button */}
         <div className="flex items-center gap-3">
-          {signedIn ? (
-            <div className="flex items-center gap-3">
-              {/* Optional user indicator shown when logged in */}
-              <div className="hidden items-center gap-2 text-sm text-foreground/80 sm:flex">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-lightgrey text-xs font-semibold text-foreground">
-                  U
-                </span>
-                <span className="max-w-37.5 truncate text-xs font-medium">
-                  user@example.com
-                </span>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleAuthToggle}
-                className="hover:bg-lightgrey transition-colors"
-              >
-                Sign Out
+          <DropdownMenuRoot>
+            <DropdownMenuTrigger asChild>
+              <Button className="flex h-8 w-8 items-center justify-center rounded-full bg-lightgrey text-xs font-semibold text-foreground">
+                U
               </Button>
-            </div>
-          ) : (
-            <Button
-              variant="login"
-              size="sm"
-              onClick={handleAuthToggle}
-              className="hover:opacity-90 transition-opacity"
-            >
-              Sign In
-            </Button>
-          )}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem>Profile</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem>Signout</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenuRoot>
         </div>
       </div>
     </header>
