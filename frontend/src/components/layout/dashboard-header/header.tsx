@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import cn from "@/utils/cn";
 import {
@@ -11,6 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
+import { logoutSession } from "@/lib/auth";
 
 export interface HeaderProps {
   /** Placeholder or custom company name */
@@ -27,26 +29,24 @@ export interface HeaderProps {
 
 export function Header({
   companyName = "Company Name",
-  isSignedIn: controlledIsSignedIn,
-  onSignIn,
   onSignOut,
   className,
 }: HeaderProps) {
-  // Support both uncontrolled (internal demo state) and controlled props
-  const [internalIsSignedIn, setInternalIsSignedIn] = React.useState(false);
+  const router = useRouter();
+  const [isSigningOut, setIsSigningOut] = React.useState(false);
 
-  const isControlled = controlledIsSignedIn !== undefined;
-  const signedIn = isControlled ? controlledIsSignedIn : internalIsSignedIn;
-
-  const handleAuthToggle = () => {
-    if (signedIn) {
-      onSignOut?.();
-    } else {
-      onSignIn?.();
+  const handleSignOut = async () => {
+    if (isSigningOut) {
+      return;
     }
 
-    if (!isControlled) {
-      setInternalIsSignedIn((prev) => !prev);
+    setIsSigningOut(true);
+    try {
+      await logoutSession();
+      onSignOut?.();
+      router.replace("/");
+    } finally {
+      setIsSigningOut(false);
     }
   };
 
@@ -57,16 +57,14 @@ export function Header({
         className,
       )}
     >
-      {/* Added 'relative' so the nav can center relative to this container */}
       <div className="relative mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        {/* Company Name */}
-        <Link href="/" className="group flex items-center gap-2.5">
+        {/* Stay on dashboard while logged in */}
+        <Link href="/dashboard" className="group flex items-center gap-2.5">
           <span className="text-xl font-bold tracking-tight text-foreground">
             {companyName}
           </span>
         </Link>
 
-        {/* Auth Button */}
         <div className="flex items-center gap-3">
           <DropdownMenuRoot>
             <DropdownMenuTrigger asChild>
@@ -77,7 +75,13 @@ export function Header({
             <DropdownMenuContent className="mt-2">
               <DropdownMenuItem>Profile</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Signout</DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  void handleSignOut();
+                }}
+              >
+                {isSigningOut ? "Signing out..." : "Signout"}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenuRoot>
         </div>
@@ -86,5 +90,5 @@ export function Header({
   );
 }
 
-export { Header as LandingHeader };
+export { Header as DashboardHeader };
 export default Header;
