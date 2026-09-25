@@ -94,7 +94,7 @@ export function Header({
       setPassword("");
       onSignIn?.();
 
-      // Redirect user to the dashboard
+      // Redirect user to the dashboard 
       router.push("/dashboard");
     } catch (err: unknown) {
       if (err instanceof Error) {
