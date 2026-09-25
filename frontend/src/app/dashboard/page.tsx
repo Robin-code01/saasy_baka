@@ -346,7 +346,7 @@ export default function Dashboard() {
           <div className="flex h-full min-h-0 flex-col lg:col-span-5">
             <div className="mb-3 flex items-center justify-between border-b border-border pb-3">
               <span className="text-xs font-semibold uppercase tracking-tight text-foreground">
-                Matched Tenders ({tenders.length})
+                Matched Tenders
               </span>
               {isLoading && (
                 <span className="font-mono text-[11px] text-foreground/50">Loading...</span>
@@ -517,24 +517,8 @@ export default function Dashboard() {
               )}
 
               {/* Actions Footer */}
-              <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-5">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-border/60 pt-5">
                 <div className="flex items-center gap-2">
-                  {selectedTender.documentUrl && selectedTender.documentUrl !== "#" && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="font-mono text-xs whitespace-nowrap shrink-0"
-                      onClick={() =>
-                        window.open(
-                          selectedTender.documentUrl,
-                          "_blank",
-                          "noopener,noreferrer"
-                        )
-                      }
-                    >
-                      View Source Notice
-                    </Button>
-                  )}
                   <Button variant="login" size="sm" className="font-mono text-xs whitespace-nowrap shrink-0">
                     Draft Proposal
                   </Button>
