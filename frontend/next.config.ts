@@ -5,4 +5,8 @@ const nextConfig: NextConfig = {
   reactCompiler: true,
 };
 
+module.exports = {
+  allowedDevOrigins: ["fourloop.robinrangi.com"],
+};
+
 export default nextConfig;
