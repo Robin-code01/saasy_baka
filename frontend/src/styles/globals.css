@@ -30,3 +30,25 @@
     -moz-osx-font-smoothing: grayscale;
   }
 }
+
+/* Thin, modern scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px; /* Width of the vertical scrollbar */
+  height: 6px; /* Height of the horizontal scrollbar */
+}
+
+/* The background track */
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* The draggable scrolling bar */
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1; /* Light slate color (Tailwind slate-300) */
+  border-radius: 9999px; /* Fully rounded edges */
+}
+
+/* Hover effect on the bar */
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8; /* Darker slate on hover (Tailwind slate-400) */
+}
