@@ -1,8 +1,9 @@
+import { SessionGate } from "@/components/auth/session-gate";
 import { Header } from "@/components/layout/landing-header/header";
 
 export default function Home() {
   return (
-    <>
+    <SessionGate mode="guest">
       <Header companyName="some company" />
       <main className="flex-1">
         <div className="my-10 mx-10 flex">
@@ -14,6 +15,6 @@ export default function Home() {
           </div>
         </div>
       </main>
-    </>
+    </SessionGate>
   );
 }
