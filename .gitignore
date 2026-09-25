@@ -1,6 +1,4 @@
 .venv/
 .env
 venv
-backend/scraping/uk_open_tenders.db
-backend/scraping/uk_open_tenders.db-wal
-backend/scraping/uk_open_tenders.db-shm
+
