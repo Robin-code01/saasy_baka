@@ -74,7 +74,7 @@ export function Header({
                 U
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent>
+            <DropdownMenuContent className="mt-2">
               <DropdownMenuItem>Profile</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem>Signout</DropdownMenuItem>
