@@ -2,6 +2,7 @@
 "use client";
 
 import * as React from "react";
+import { SessionGate } from "@/components/auth/session-gate";
 import { Header } from "@/components/layout/landing-header/header";
 
 interface Particle {
@@ -261,7 +262,7 @@ export default function Home() {
   }, []);
 
   return (
-    <>
+    <SessionGate mode="guest">
       {/* High-tech interactive background */}
       <InteractiveBackground />
 
@@ -330,6 +331,6 @@ export default function Home() {
           </div>
         </div>
       </main>
-    </>
+    </SessionGate>
   );
 }

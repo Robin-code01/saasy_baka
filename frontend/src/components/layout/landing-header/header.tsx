@@ -14,9 +14,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import cn from "@/utils/cn";
-
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "https://fourloop-backend.robinrangi.com";
+import { API_BASE_URL, clearSession, saveSession } from "@/lib/auth";
 
 export interface HeaderProps {
   companyName?: string;
@@ -81,6 +79,11 @@ export function Header({
         localStorage.setItem("accessToken", data.access);
       }
 
+      // Persist login response so route gates work without a session-fetch API
+      if (typeof data?.user_id === "number" && typeof data?.username === "string") {
+        saveSession({ user_id: data.user_id, username: data.username });
+      }
+
       if (!isControlled) {
         setInternalIsSignedIn(true);
       }
@@ -114,8 +117,7 @@ export function Header({
     } catch (err) {
       console.error("Sign out failed:", err);
     } finally {
-      localStorage.removeItem("authToken");
-      localStorage.removeItem("accessToken");
+      clearSession();
 
       if (!isControlled) {
         setInternalIsSignedIn(false);
