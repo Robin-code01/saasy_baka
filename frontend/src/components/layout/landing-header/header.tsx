@@ -12,9 +12,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import cn from "@/utils/cn";
-
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "https://fourloop-backend.robinrangi.com";
+import { API_BASE_URL, clearSession, saveSession } from "@/lib/auth";
 
 export interface HeaderProps {
   /** Placeholder or custom company name */
@@ -78,11 +76,15 @@ export function Header({
         throw new Error(errorMsg);
       }
 
-      // Store auth token in storage if returned by the backend
       if (data?.token) {
         localStorage.setItem("authToken", data.token);
       } else if (data?.access) {
         localStorage.setItem("accessToken", data.access);
+      }
+
+      // Persist login response so route gates work without a session-fetch API
+      if (typeof data?.user_id === "number" && typeof data?.username === "string") {
+        saveSession({ user_id: data.user_id, username: data.username });
       }
 
       if (!isControlled) {
@@ -94,7 +96,6 @@ export function Header({
       setPassword("");
       onSignIn?.();
 
-      // Redirect user to the dashboard 
       router.push("/dashboard");
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -119,8 +120,7 @@ export function Header({
     } catch (err) {
       console.error("Sign out failed:", err);
     } finally {
-      localStorage.removeItem("authToken");
-      localStorage.removeItem("accessToken");
+      clearSession();
 
       if (!isControlled) {
         setInternalIsSignedIn(false);
