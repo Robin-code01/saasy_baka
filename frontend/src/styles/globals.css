@@ -2,10 +2,10 @@
 
 @theme {
   --color-background: hsl(214 77% 98%);
-  --color-background-hover: hsl(214 77% 93%);
+  --color-background-hover: hsl(214 47% 95%);
   --color-foreground: hsl(0 0% 16%);
 
-  --color-lightgrey: hsl(214 23% 81%);
+  --color-lightgrey: hsl(214 23% 90%);
   --color-lightgrey-foreground: hsl(0 0% 16%);
   --color-lightgrey-hover: hsl(214 23% 86%);
 
