@@ -16,7 +16,8 @@ const buttonVariants = cva(
           "bg-secondary text-secondary-foreground shadow hover:bg-secondary-hover",
         ghost: "hover:bg-background/80",
         accent: "bg-accent text-accent-foreground shadow hover:bg-accent-hover",
-        login: "bg-foreground text-background",
+        login: "bg-background text-foreground",
+        register: "bg-foreground text-background",
       },
       size: {
         default: "h-9 px-4 py-2",
