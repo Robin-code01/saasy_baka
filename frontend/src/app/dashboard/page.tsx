@@ -176,11 +176,6 @@ async function fetchTenders(): Promise<Tender[]> {
 
 function InteractiveBackground() {
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
-  const mouseRef = React.useRef<{ x: number; y: number; active: boolean }>({
-    x: -1000,
-    y: -1000,
-    active: false,
-  });
 
   React.useEffect(() => {
     const canvas = canvasRef.current;
@@ -224,18 +219,6 @@ function InteractiveBackground() {
     initSize();
     window.addEventListener("resize", initSize);
 
-    const onMouseMove = (e: MouseEvent) => {
-      mouseRef.current.x = e.clientX;
-      mouseRef.current.y = e.clientY;
-      mouseRef.current.active = true;
-    };
-    const onMouseLeave = () => {
-      mouseRef.current.active = false;
-    };
-
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseleave", onMouseLeave);
-
     let time = 0;
     const render = () => {
       time += 0.02;
@@ -261,7 +244,7 @@ function InteractiveBackground() {
             ctx.beginPath();
             ctx.moveTo(p.x, p.y);
             ctx.lineTo(p2.x, p2.y);
-            ctx.strokeStyle = `hsla(216, 51%, 44%, ${(1 - dist / 125) * 0.22})`;
+            ctx.strokeStyle = `hsla(28, 80%, 42%, ${(1 - dist / 125) * 0.24})`;
             ctx.lineWidth = 0.9;
             ctx.stroke();
           }
@@ -270,7 +253,7 @@ function InteractiveBackground() {
         const pulse = Math.sin(time * 2 + p.pulsePhase) * 0.15;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-        ctx.fillStyle = `hsla(216, 51%, 44%, ${Math.min(1, p.baseAlpha + pulse)})`;
+        ctx.fillStyle = `hsla(28, 80%, 42%, ${Math.min(1, p.baseAlpha + pulse)})`;
         ctx.fill();
       }
 
@@ -282,25 +265,23 @@ function InteractiveBackground() {
     return () => {
       cancelAnimationFrame(animationId);
       window.removeEventListener("resize", initSize);
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseleave", onMouseLeave);
     };
   }, []);
 
   return (
     <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
       <div
-        className="pointer-events-none absolute inset-0 opacity-80"
+        className="pointer-events-none absolute inset-0 opacity-70"
         style={{
-          background: `radial-gradient(circle 500px at var(--mouse-x, 50%) var(--mouse-y, 40%), hsl(216 51% 44% / 0.11), transparent 75%)`,
+          background: `radial-gradient(circle 500px at var(--mouse-x, 50%) var(--mouse-y, 40%), hsl(28 90% 45% / 0.12), transparent 75%)`,
         }}
       />
       <div
-        className="absolute inset-0 opacity-[0.38]"
+        className="absolute inset-0 opacity-[0.5]"
         style={{
           backgroundImage: `
-            linear-gradient(to right, hsl(0 0% 87.84% / 0.6) 1px, transparent 1px),
-            linear-gradient(to bottom, hsl(0 0% 87.84% / 0.6) 1px, transparent 1px)
+            linear-gradient(to right, hsl(32 14% 74% / 0.6) 1px, transparent 1px),
+            linear-gradient(to bottom, hsl(32 14% 74% / 0.6) 1px, transparent 1px)
           `,
           backgroundSize: "40px 40px",
         }}
@@ -371,7 +352,6 @@ export default function Dashboard() {
         throw new Error(errorMsg);
       }
 
-      // Check Content-Disposition header for filename
       const disposition = res.headers.get("Content-Disposition");
       let filename = `tender_draft_${tender.id}.pdf`;
       if (disposition && disposition.includes("filename=")) {
@@ -384,7 +364,6 @@ export default function Dashboard() {
       const blob = await res.blob();
       const pdfObjectUrl = window.URL.createObjectURL(blob);
 
-      // Trigger browser download
       const link = document.createElement("a");
       link.href = pdfObjectUrl;
       link.download = filename;
@@ -423,11 +402,11 @@ export default function Dashboard() {
           {/* Left Column: Tenders List */}
           <div className="flex h-full min-h-0 flex-col lg:col-span-5">
             <div className="mb-3 flex items-center justify-between border-b border-border pb-3">
-              <span className="text-xs font-semibold uppercase tracking-tight text-foreground">
+              <span className="text-xs font-bold uppercase tracking-wider text-foreground">
                 Matched Tenders
               </span>
               {isLoading && (
-                <span className="font-mono text-[11px] text-foreground/50">Loading...</span>
+                <span className="font-mono text-[11px] font-bold text-stone-600">Loading...</span>
               )}
             </div>
 
@@ -448,28 +427,28 @@ export default function Dashboard() {
           </div>
 
           {/* Right Column: Selected Tender Details */}
-          <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-background/85 shadow-xs backdrop-blur-md lg:col-span-7">
+          <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-white shadow-sm lg:col-span-7">
             <div className="custom-scrollbar flex-1 overflow-y-auto p-6 sm:p-8">
               {/* Title */}
               <div>
-                <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl leading-snug">
+                <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl leading-snug">
                   {selectedTender.title}
                 </h1>
               </div>
 
               {/* Total Value & Deadline */}
-              <div className="mt-6 rounded-xl border border-border bg-background p-5">
+              <div className="mt-6 rounded-xl border border-border bg-stone-100/75 p-5">
                 <dl className="grid grid-cols-2 gap-6 text-sm">
                   <div>
-                    <dt className="text-xs text-foreground/60">Total Value</dt>
-                    <dd className="mt-1 font-mono text-base font-semibold text-foreground">
+                    <dt className="text-xs font-bold uppercase tracking-wider text-stone-700">Total Value</dt>
+                    <dd className="mt-1 font-mono text-base font-bold text-foreground">
                       ${selectedTender.value.toLocaleString()}
                     </dd>
                   </div>
 
                   <div>
-                    <dt className="text-xs text-foreground/60">Deadline</dt>
-                    <dd className="mt-1 font-mono text-base font-medium text-foreground">
+                    <dt className="text-xs font-bold uppercase tracking-wider text-stone-700">Deadline</dt>
+                    <dd className="mt-1 font-mono text-base font-bold text-foreground">
                       {formatDate(selectedTender.date)}
                     </dd>
                   </div>
@@ -479,17 +458,17 @@ export default function Dashboard() {
               {/* Assessment Evaluations */}
               <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {/* Match Evaluation */}
-                <div className="flex flex-col rounded-xl border border-border bg-background p-5">
+                <div className="flex flex-col rounded-xl border border-border bg-stone-100/75 p-5">
                   <div className="flex items-center justify-between text-xs font-mono">
-                    <span className="font-semibold uppercase tracking-wider text-foreground">
+                    <span className="font-bold uppercase tracking-wider text-foreground">
                       Compatibility
                     </span>
-                    <span className="font-bold" style={{ color: currentMatchColor }}>
+                    <span className="font-extrabold" style={{ color: currentMatchColor }}>
                       {currentMatchCategory} ({selectedTender.match}%)
                     </span>
                   </div>
 
-                  <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-border/60">
+                  <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-stone-200">
                     <div
                       className="h-full rounded-full transition-all duration-500 ease-out"
                       style={{
@@ -499,28 +478,28 @@ export default function Dashboard() {
                     />
                   </div>
 
-                  <div className="mt-4 border-t border-border/60 pt-3">
-                    <span className="text-[11px] font-mono uppercase tracking-wider text-foreground/60">
+                  <div className="mt-4 border-t border-border pt-3">
+                    <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-stone-700">
                       Reason for Compatibility
                     </span>
-                    <p className="mt-1 text-xs sm:text-sm leading-relaxed text-foreground/80">
+                    <p className="mt-1.5 text-xs sm:text-sm leading-relaxed font-medium text-foreground/90">
                       {selectedTender.fitReason}
                     </p>
                   </div>
                 </div>
 
                 {/* Risk Evaluation */}
-                <div className="flex flex-col rounded-xl border border-border bg-background p-5">
+                <div className="flex flex-col rounded-xl border border-border bg-stone-100/75 p-5">
                   <div className="flex items-center justify-between text-xs font-mono">
-                    <span className="font-semibold uppercase tracking-wider text-foreground">
+                    <span className="font-bold uppercase tracking-wider text-foreground">
                       Risk Evaluation
                     </span>
-                    <span className="font-bold" style={{ color: currentRiskColor }}>
+                    <span className="font-extrabold" style={{ color: currentRiskColor }}>
                       {currentRiskCategory} ({selectedTender.risk}%)
                     </span>
                   </div>
 
-                  <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-border/60">
+                  <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-stone-200">
                     <div
                       className="h-full rounded-full transition-all duration-500 ease-out"
                       style={{
@@ -530,11 +509,11 @@ export default function Dashboard() {
                     />
                   </div>
 
-                  <div className="mt-4 border-t border-border/60 pt-3">
-                    <span className="text-[11px] font-mono uppercase tracking-wider text-foreground/60">
+                  <div className="mt-4 border-t border-border pt-3">
+                    <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-stone-700">
                       Reason for Risk
                     </span>
-                    <p className="mt-1 text-xs sm:text-sm leading-relaxed text-foreground/80">
+                    <p className="mt-1.5 text-xs sm:text-sm leading-relaxed font-medium text-foreground/90">
                       {selectedTender.riskReason}
                     </p>
                   </div>
@@ -543,10 +522,10 @@ export default function Dashboard() {
 
               {/* Description */}
               <div className="mt-8">
-                <h2 className="border-b border-border/60 pb-2 text-xs font-semibold uppercase tracking-tight text-foreground">
+                <h2 className="border-b border-border pb-2 text-xs font-bold uppercase tracking-wider text-foreground">
                   Description & Scope of Work
                 </h2>
-                <p className="mt-3 text-sm leading-relaxed text-foreground/80 sm:text-base">
+                <p className="mt-3 text-sm leading-relaxed font-medium text-foreground/90 sm:text-base">
                   {selectedTender.description}
                 </p>
               </div>
@@ -554,7 +533,7 @@ export default function Dashboard() {
               {/* Attached Documents & Links */}
               {selectedTender.documents && selectedTender.documents.length > 0 && (
                 <div className="mt-8">
-                  <h2 className="border-b border-border/60 pb-2 text-xs font-semibold uppercase tracking-tight text-foreground">
+                  <h2 className="border-b border-border pb-2 text-xs font-bold uppercase tracking-wider text-foreground">
                     Attached Documents & Links
                   </h2>
                   <div className="mt-3 flex flex-col gap-2">
@@ -564,23 +543,23 @@ export default function Dashboard() {
                         href={doc.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="group flex items-center justify-between rounded-lg border border-border bg-background p-3 transition hover:border-foreground/30 hover:bg-lightgrey/30"
+                        className="group flex items-center justify-between rounded-lg border border-border bg-stone-100/60 p-3 transition hover:border-foreground/60 hover:bg-stone-100"
                       >
                         <div className="flex items-center gap-3 overflow-hidden">
-                          <span className="shrink-0 rounded bg-border/60 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-foreground/80">
+                          <span className="shrink-0 rounded border border-stone-300 bg-white px-2 py-0.5 font-mono text-[10px] font-bold text-stone-900 shadow-2xs">
                             {getDocumentBadge(doc.format, doc.url)}
                           </span>
-                          <span className="truncate text-xs font-medium text-foreground group-hover:underline">
+                          <span className="truncate text-xs font-semibold text-foreground group-hover:underline">
                             {doc.title}
                           </span>
                         </div>
                         <svg
-                          className="h-3.5 w-3.5 shrink-0 text-foreground/40 transition group-hover:text-foreground"
+                          className="h-3.5 w-3.5 shrink-0 text-stone-500 transition group-hover:text-foreground"
                           xmlns="http://www.w3.org/2000/svg"
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
-                          strokeWidth="2"
+                          strokeWidth="2.5"
                         >
                           <path
                             strokeLinecap="round"
@@ -595,7 +574,7 @@ export default function Dashboard() {
               )}
 
               {/* Actions Footer */}
-              <div className="mt-8 border-t border-border/60 pt-5">
+              <div className="mt-8 border-t border-border pt-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex flex-wrap items-center gap-2.5">
                     <Button
@@ -603,10 +582,10 @@ export default function Dashboard() {
                       size="sm"
                       isLoading={draftingId === selectedTender.id}
                       onClick={() => handleDraftProposal(selectedTender)}
-                      className="font-mono text-xs whitespace-nowrap shrink-0 transition-all hover:opacity-90 cursor-pointer"
+                      className="font-mono text-xs whitespace-nowrap shrink-0 transition-all hover:opacity-90 cursor-pointer shadow-xs bg-stone-900 hover:bg-stone-800 text-stone-50"
                       icon={
                         <svg
-                          className="mr-1.5 h-3.5 w-3.5"
+                          className="mr-1.5 h-3.5 w-3.5 text-amber-400"
                           viewBox="0 0 24 24"
                           fill="none"
                           stroke="currentColor"
@@ -632,15 +611,15 @@ export default function Dashboard() {
                           href={draftStatus.pdfUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 rounded-4xl border border-border bg-background px-3 py-1.5 font-mono text-xs font-medium text-foreground transition hover:border-foreground/30 hover:bg-lightgrey/30"
+                          className="inline-flex items-center gap-1.5 rounded-4xl border border-border bg-white px-3.5 py-1.5 font-mono text-xs font-bold text-foreground shadow-2xs transition hover:border-foreground/60 hover:bg-stone-50"
                         >
                           <svg
-                            className="h-3.5 w-3.5 text-foreground/60"
+                            className="h-3.5 w-3.5 text-stone-600"
                             xmlns="http://www.w3.org/2000/svg"
                             fill="none"
                             viewBox="0 0 24 24"
                             stroke="currentColor"
-                            strokeWidth="2"
+                            strokeWidth="2.5"
                           >
                             <path
                               strokeLinecap="round"
@@ -654,24 +633,24 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* Draft Status Feedback Banner */}
+                {/* Warm High-Contrast Feedback Banners */}
                 {draftStatus?.id === selectedTender.id && (
                   <div
                     className={cn(
-                      "mt-3 flex items-center justify-between rounded-lg border p-3 text-xs transition-all",
+                      "mt-3 flex items-center justify-between rounded-lg border p-3.5 text-xs font-semibold transition-all",
                       draftStatus.type === "success"
-                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700"
-                        : "border-red-500/30 bg-red-500/10 text-red-700"
+                        ? "border-emerald-700 bg-emerald-50 text-emerald-950"
+                        : "border-red-700 bg-red-50 text-red-950"
                     )}
                   >
                     <div className="flex items-center gap-2 font-mono">
                       {draftStatus.type === "success" ? (
                         <svg
-                          className="h-4 w-4 shrink-0 text-emerald-600"
+                          className="h-4 w-4 shrink-0 text-emerald-800"
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
-                          strokeWidth="2"
+                          strokeWidth="2.5"
                         >
                           <path
                             strokeLinecap="round"
@@ -681,11 +660,11 @@ export default function Dashboard() {
                         </svg>
                       ) : (
                         <svg
-                          className="h-4 w-4 shrink-0 text-red-600"
+                          className="h-4 w-4 shrink-0 text-red-800"
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
-                          strokeWidth="2"
+                          strokeWidth="2.5"
                         >
                           <path
                             strokeLinecap="round"
@@ -700,7 +679,7 @@ export default function Dashboard() {
                     <button
                       type="button"
                       onClick={() => setDraftStatus(null)}
-                      className="ml-3 text-xs opacity-60 hover:opacity-100 cursor-pointer"
+                      className="ml-3 text-xs opacity-75 hover:opacity-100 cursor-pointer"
                       aria-label="Dismiss message"
                     >
                       ✕

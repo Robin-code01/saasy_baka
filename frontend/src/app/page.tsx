@@ -51,7 +51,6 @@ function InteractiveBackground() {
       canvas.height = height * dpr;
       ctx.scale(dpr, dpr);
 
-      // Create high-tech tender node particles
       const count = Math.min(Math.floor((width * height) / 14000), 75);
       particles = Array.from({ length: count }, () => ({
         x: Math.random() * width,
@@ -67,7 +66,6 @@ function InteractiveBackground() {
     initSize();
     window.addEventListener("resize", initSize);
 
-    // Track mouse coordinates
     const onMouseMove = (e: MouseEvent) => {
       mouseRef.current.x = e.clientX;
       mouseRef.current.y = e.clientY;
@@ -78,7 +76,6 @@ function InteractiveBackground() {
       mouseRef.current.active = false;
     };
 
-    // Emit interactive radar shockwave on click
     const onPointerDown = (e: MouseEvent) => {
       wavesRef.current.push({
         x: e.clientX,
@@ -93,7 +90,6 @@ function InteractiveBackground() {
     window.addEventListener("mouseleave", onMouseLeave);
     window.addEventListener("mousedown", onPointerDown);
 
-    // Animation Render Loop
     let time = 0;
     const render = () => {
       time += 0.02;
@@ -101,7 +97,6 @@ function InteractiveBackground() {
 
       const mouse = mouseRef.current;
 
-      // 1. Render & update shockwave radar rings
       for (let i = wavesRef.current.length - 1; i >= 0; i--) {
         const wave = wavesRef.current[i];
         wave.radius += 5.5;
@@ -110,16 +105,15 @@ function InteractiveBackground() {
         ctx.save();
         ctx.beginPath();
         ctx.arc(wave.x, wave.y, wave.radius, 0, Math.PI * 2);
-        ctx.strokeStyle = `hsla(216, 51%, 44%, ${wave.alpha * 0.4})`;
+        ctx.strokeStyle = `hsla(28, 85%, 44%, ${wave.alpha * 0.45})`;
         ctx.lineWidth = 2.5;
         ctx.setLineDash([4, 6]);
         ctx.stroke();
 
-        // Secondary inner echo ring
         if (wave.radius > 30) {
           ctx.beginPath();
           ctx.arc(wave.x, wave.y, wave.radius - 20, 0, Math.PI * 2);
-          ctx.strokeStyle = `hsla(216, 51%, 44%, ${wave.alpha * 0.15})`;
+          ctx.strokeStyle = `hsla(28, 85%, 44%, ${wave.alpha * 0.18})`;
           ctx.lineWidth = 1;
           ctx.setLineDash([]);
           ctx.stroke();
@@ -131,32 +125,28 @@ function InteractiveBackground() {
         }
       }
 
-      // 2. Update and draw particles
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
         p.x += p.vx;
         p.y += p.vy;
 
-        // Wrap around bounds
         if (p.x < 0) p.x = width;
         if (p.x > width) p.x = 0;
         if (p.y < 0) p.y = height;
         if (p.y > height) p.y = 0;
 
-        // Mouse gravitational attraction & proximity excitement
         let excited = 0;
         if (mouse.active) {
           const dx = mouse.x - p.x;
           const dy = mouse.y - p.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
           if (dist < 180) {
-            excited = (1 - dist / 180);
+            excited = 1 - dist / 180;
             p.x += (dx / dist) * excited * 0.6;
             p.y += (dy / dist) * excited * 0.6;
           }
         }
 
-        // Draw connections between neighboring nodes
         for (let j = i + 1; j < particles.length; j++) {
           const p2 = particles[j];
           const dx = p.x - p2.x;
@@ -164,46 +154,43 @@ function InteractiveBackground() {
           const dist = Math.sqrt(dx * dx + dy * dy);
 
           if (dist < 125) {
-            const lineAlpha = (1 - dist / 125) * 0.22;
+            const lineAlpha = (1 - dist / 125) * 0.24;
             ctx.beginPath();
             ctx.moveTo(p.x, p.y);
             ctx.lineTo(p2.x, p2.y);
-            ctx.strokeStyle = `hsla(216, 51%, 44%, ${lineAlpha})`;
+            ctx.strokeStyle = `hsla(28, 85%, 44%, ${lineAlpha})`;
             ctx.lineWidth = 0.9;
             ctx.stroke();
           }
         }
 
-        // Tether lines directly to cursor when nearby
         if (mouse.active) {
           const mdx = mouse.x - p.x;
           const mdy = mouse.y - p.y;
           const mdist = Math.sqrt(mdx * mdx + mdy * mdy);
           if (mdist < 140) {
-            const cursorLineAlpha = (1 - mdist / 140) * 0.38;
+            const cursorLineAlpha = (1 - mdist / 140) * 0.42;
             ctx.beginPath();
             ctx.moveTo(p.x, p.y);
             ctx.lineTo(mouse.x, mouse.y);
-            ctx.strokeStyle = `hsla(216, 51%, 44%, ${cursorLineAlpha})`;
+            ctx.strokeStyle = `hsla(28, 85%, 44%, ${cursorLineAlpha})`;
             ctx.lineWidth = 1.1;
             ctx.stroke();
           }
         }
 
-        // Draw particle node
         const pulse = Math.sin(time * 2 + p.pulsePhase) * 0.15;
         const currentAlpha = Math.min(1, p.baseAlpha + pulse + excited * 0.5);
 
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.radius + (excited ? 1.5 : 0), 0, Math.PI * 2);
-        ctx.fillStyle = `hsla(216, 51%, 44%, ${currentAlpha})`;
+        ctx.fillStyle = `hsla(28, 85%, 44%, ${currentAlpha})`;
         ctx.fill();
 
-        // Node glow aura when excited by mouse
         if (excited > 0.1) {
           ctx.beginPath();
           ctx.arc(p.x, p.y, (p.radius + 4) * (1 + excited), 0, Math.PI * 2);
-          ctx.fillStyle = `hsla(216, 51%, 44%, ${excited * 0.12})`;
+          ctx.fillStyle = `hsla(28, 85%, 44%, ${excited * 0.15})`;
           ctx.fill();
         }
       }
@@ -224,34 +211,28 @@ function InteractiveBackground() {
 
   return (
     <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-      {/* Interactive Cursor Spotlight Glow */}
       <div
-        className="pointer-events-none absolute inset-0 opacity-80"
+        className="pointer-events-none absolute inset-0 opacity-70"
         style={{
-          background: `radial-gradient(circle 500px at var(--mouse-x, 50%) var(--mouse-y, 40%), hsl(216 51% 44% / 0.11), transparent 75%)`,
+          background: `radial-gradient(circle 500px at var(--mouse-x, 50%) var(--mouse-y, 40%), hsl(28 90% 45% / 0.12), transparent 75%)`,
         }}
       />
-
-      {/* Subtle high-tech background coordinate grid */}
       <div
-        className="absolute inset-0 opacity-[0.38]"
+        className="absolute inset-0 opacity-[0.5]"
         style={{
           backgroundImage: `
-            linear-gradient(to right, hsl(0 0% 87.84% / 0.6) 1px, transparent 1px),
-            linear-gradient(to bottom, hsl(0 0% 87.84% / 0.6) 1px, transparent 1px)
+            linear-gradient(to right, hsl(32 14% 74% / 0.6) 1px, transparent 1px),
+            linear-gradient(to bottom, hsl(32 14% 74% / 0.6) 1px, transparent 1px)
           `,
           backgroundSize: "40px 40px",
         }}
       />
-
-      {/* Interactive Canvas */}
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
     </div>
   );
 }
 
 export default function Home() {
-  // Sync mouse position for the CSS spotlight gradient
   React.useEffect(() => {
     const handleMove = (e: MouseEvent) => {
       document.documentElement.style.setProperty("--mouse-x", `${e.clientX}px`);
@@ -263,67 +244,58 @@ export default function Home() {
 
   return (
     <SessionGate mode="guest">
-      {/* High-tech interactive background */}
       <InteractiveBackground />
-
       <Header companyName="Proppy" />
 
       <main className="flex-1 flex flex-col justify-between max-w-4xl mx-auto w-full px-6 py-12 sm:py-16">
         <div>
-          {/* Primary headline and summary */}
-          <h1 className="mt-4 text-6xl sm:text-6xl font-semibold tracking-tight text-foreground">
+          <h1 className="mt-4 text-5xl sm:text-6xl font-bold tracking-tight text-foreground leading-tight">
             Get government tenders tailored to your company's speciality.
           </h1>
 
-          <p className="mt-4 text-base sm:text-lg leading-relaxed text-foreground/80 max-w-2xl">
-            
-          </p>
-
-          {/* Structural specifications (Avoiding standard 3-card feature blocks) */}
           <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-border pt-10">
             <div>
-              <h2 className="text-sm font-semibold tracking-tight text-foreground uppercase">
+              <h2 className="text-sm font-bold tracking-tight text-foreground uppercase">
                 Step 1:
               </h2>
-              <p className="mt-2 text-sm leading-relaxed text-foreground/75">
+              <p className="mt-2 text-sm leading-relaxed font-medium text-stone-800">
                 Sign your company up for a deal with Proppy.
               </p>
             </div>
 
             <div>
-              <h2 className="text-sm font-semibold tracking-tight text-foreground uppercase">
+              <h2 className="text-sm font-bold tracking-tight text-foreground uppercase">
                 Step 2:
               </h2>
-              <p className="mt-2 text-sm leading-relaxed text-foreground/75">
+              <p className="mt-2 text-sm leading-relaxed font-medium text-stone-800">
                 Find the most suitable and profitable government tenders for your company.
               </p>
             </div>
           </div>
 
-          {/* Technical Data Specification Reference */}
-          <div className="mt-10 rounded-xl border border-border bg-background p-6">
-            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
-              <div className="border-b border-border/60 pb-3">
-                <dt className="text-xs text-foreground/60">Matches</dt>
-                <dd className="mt-1 font-mono text-xs font-medium text-foreground">
-                  A specialized AI agent matches your company with the most suitable government tenders. 
+          <div className="mt-10 rounded-xl border border-border bg-white shadow-sm p-6 sm:p-7">
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5 text-sm">
+              <div className="border-b border-border pb-4">
+                <dt className="text-xs font-bold uppercase tracking-wider text-stone-700">Matches</dt>
+                <dd className="mt-1.5 font-mono text-xs font-bold text-foreground leading-relaxed">
+                  A specialized AI agent matches your company with the most suitable government tenders.
                 </dd>
               </div>
-              <div className="border-b border-border/60 pb-3">
-                <dt className="text-xs text-foreground/60">Evaluation</dt>
-                <dd className="mt-1 text-xs font-mono font-medium text-foreground">
+              <div className="border-b border-border pb-4">
+                <dt className="text-xs font-bold uppercase tracking-wider text-stone-700">Evaluation</dt>
+                <dd className="mt-1.5 text-xs font-mono font-bold text-foreground leading-relaxed">
                   Receive a rating for compatibility and risk assessment.
                 </dd>
               </div>
-              <div className="border-border/60">
-                <dt className="text-xs text-foreground/60">Quick Info</dt>
-                <dd className="mt-1 font-mono text-xs font-medium text-foreground">
+              <div className="pt-1">
+                <dt className="text-xs font-bold uppercase tracking-wider text-stone-700">Quick Info</dt>
+                <dd className="mt-1.5 font-mono text-xs font-bold text-foreground leading-relaxed">
                   Discover the important details of each tender at a single glance. No sifting through pages of fluff.
                 </dd>
               </div>
-              <div className="border-border/60">
-                <dt className="text-xs text-foreground/60">Draft</dt>
-                <dd className="mt-1 text-xs font-mono font-medium text-foreground">
+              <div className="pt-1">
+                <dt className="text-xs font-bold uppercase tracking-wider text-stone-700">Draft</dt>
+                <dd className="mt-1.5 text-xs font-mono font-bold text-foreground leading-relaxed">
                   Create a drafted proposal for your application at the click of a button.
                 </dd>
               </div>
