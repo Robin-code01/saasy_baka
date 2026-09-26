@@ -8,6 +8,7 @@ releases live only in ``procurement_state`` and must never be matched.
 
 import hashlib
 import json
+import logging
 import os
 import sqlite3
 from datetime import datetime, timezone
@@ -27,6 +28,9 @@ from rest_framework.response import Response
 from django.views.decorators.csrf import csrf_exempt
 
 from .models import TenderAssessment, CompanyProfile
+
+
+logger = logging.getLogger(__name__)
 
 
 TENDER_ASSESSMENT_SCHEMA = {
@@ -696,7 +700,7 @@ def get_tender_draft(request, ocid):
     """Generate and return a PDF draft proposal for a specific tender using AI."""
     try:
         connection = _open_tender_database()
-        company_context = _read_company_context(user)
+        company_context = _read_company_context(request.user)
     except ImproperlyConfigured as exc:
         return Response({"error": str(exc)}, status=503)
 
@@ -797,9 +801,19 @@ def get_tender_draft(request, ocid):
 @permission_classes([IsAuthenticated])
 def generate_business_profile(request):
     """Takes raw user input, sends to AI to generate markdown profile, and saves."""
-    raw_info = request.data.get("raw_information")
+    raw_info = request.data.get("raw_information", "").strip()
     if not raw_info:
         return Response({"error": "raw_information is required"}, status=400)
+
+    # Do this before the paid AI request. A deployment with unapplied migrations
+    # must not successfully generate a profile only to fail while saving it.
+    try:
+        CompanyProfile.objects.exists()
+    except (OperationalError, ProgrammingError):
+        return Response(
+            {"error": "Profile storage is unavailable. Run: python manage.py migrate"},
+            status=503,
+        )
     
     try:
         client = _get_openai_client()
@@ -823,16 +837,35 @@ def generate_business_profile(request):
             temperature=0.5
         )
         markdown_draft = ai_response.choices[0].message.content
-    except Exception as e:
-        return Response({"error": f"AI generation failed: {str(e)}"}, status=500)
-        
-    profile, created = CompanyProfile.objects.update_or_create(
-        user=request.user,
-        defaults={
-            "raw_information": raw_info,
-            "markdown_context": markdown_draft
-        }
-    )
+    except Exception:
+        # The provider's error text can include implementation and account
+        # details, so retain it in server logs but do not expose it to clients.
+        logger.exception("Business profile generation failed for user %s", request.user.pk)
+        return Response(
+            {"error": "Business profile generation is temporarily unavailable. Please try again."},
+            status=502,
+        )
+
+    if not isinstance(markdown_draft, str) or not markdown_draft.strip():
+        logger.error("Business profile generation returned no text for user %s", request.user.pk)
+        return Response(
+            {"error": "Business profile generation returned no content. Please try again."},
+            status=502,
+        )
+
+    try:
+        profile, _ = CompanyProfile.objects.update_or_create(
+            user=request.user,
+            defaults={
+                "raw_information": raw_info,
+                "markdown_context": markdown_draft,
+            },
+        )
+    except (OperationalError, ProgrammingError):
+        return Response(
+            {"error": "Profile storage is unavailable. Run: python manage.py migrate"},
+            status=503,
+        )
     
     return Response({
         "message": "Profile generated successfully",
@@ -852,7 +885,9 @@ def manage_business_profile(request):
                 "markdown_context": profile.markdown_context
             })
         except CompanyProfile.DoesNotExist:
-            return Response({"error": "Profile not found"}, status=404)
+            # A new account has no profile until its first generation. This is
+            # an expected empty state, not a missing API resource.
+            return Response({"raw_information": "", "markdown_context": ""})
             
     elif request.method == 'PUT':
         markdown_context = request.data.get("markdown_context")
