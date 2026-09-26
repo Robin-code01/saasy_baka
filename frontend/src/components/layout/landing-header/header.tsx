@@ -14,7 +14,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import cn from "@/utils/cn";
-import { API_BASE_URL, saveSession } from "@/lib/auth";
+import { API_BASE_URL, saveSession, clearSession } from "@/lib/auth";
 
 export interface HeaderProps {
   companyName?: string;
@@ -63,6 +63,8 @@ export function Header({ companyName = "Proppy", className }: HeaderProps) {
         throw new Error(errorMsg);
       }
 
+
+      clearSession();
       if (data?.token) {
         localStorage.setItem("authToken", data.token);
       } else if (data?.access) {
@@ -96,6 +98,7 @@ export function Header({ companyName = "Proppy", className }: HeaderProps) {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
+    clearSession();
 
     try {
       const trimmedUsername = registerUsername.trim();

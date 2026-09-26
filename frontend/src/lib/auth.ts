@@ -43,12 +43,26 @@ export function getSession(): AuthUser | null {
   }
 }
 
+// src/lib/auth.ts
+
 export function clearSession() {
   if (typeof window !== "undefined") {
     localStorage.removeItem(SESSION_KEY);
     localStorage.removeItem("authToken");
     localStorage.removeItem("accessToken");
     localStorage.removeItem("username");
+
+    // Clean up all cached company form states on logout
+    try {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith("proppy_company_form_state")) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach((k) => localStorage.removeItem(k));
+    } catch {}
   }
 }
 
