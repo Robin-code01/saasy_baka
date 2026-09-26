@@ -26,7 +26,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from django.views.decorators.csrf import csrf_exempt
 
-from .models import TenderAssessment
+from .models import TenderAssessment, CompanyProfile
 
 
 TENDER_ASSESSMENT_SCHEMA = {
@@ -160,20 +160,15 @@ def _open_tender_database() -> sqlite3.Connection:
     return connection
 
 
-def _read_company_context() -> str:
-    context_path = _configured_path("TENDER_COMPANY_CONTEXT_PATH")
+def _read_company_context(user) -> str:
     try:
-        context = context_path.read_text(encoding="utf-8").strip()
-    except OSError as exc:
-        raise ImproperlyConfigured(
-            f"Company description and capabilities file cannot be read: {context_path}"
-        ) from exc
-
-    if not context:
-        raise ImproperlyConfigured(
-            f"Company description and capabilities file is empty: {context_path}"
-        )
-    return context
+        profile = user.companyprofile
+        context = profile.markdown_context.strip()
+        if not context:
+            raise ImproperlyConfigured("Your company profile markdown is empty. Please generate it first.")
+        return context
+    except CompanyProfile.DoesNotExist:
+        raise ImproperlyConfigured("You have not created a company profile yet.")
 
 
 def _add_tender_children(
@@ -368,17 +363,14 @@ def _assess_tender(client: Any, tender: dict[str, Any], company_context: str) ->
 
 
 def _save_assessment(
+    user,
     ocid: str,
     assessment: dict[str, Any],
     company_context: str,
     tender_updated_at: str | None,
 ) -> None:
-    """Upsert an assessment using OCID, never a notice/release identifier.
-
-    This lives in Django's app database, keeping the government-source
-    database read-only to the web application.
-    """
     TenderAssessment.objects.update_or_create(
+        user=user,
         ocid=ocid,
         defaults={
             "risk_rating": assessment["risk_rating"],
@@ -472,10 +464,10 @@ def get_profile(request):
     }, status=200)
 
 
-def _assess_selected_active_tenders(limit: int | None) -> Response:
+def _assess_selected_active_tenders(limit: int | None, user) -> Response:
     """Assess active source tenders with the latest closing dates first."""
     try:
-        company_context = _read_company_context()
+        company_context = _read_company_context(user)
         connection = _open_tender_database()
     except ImproperlyConfigured as exc:
         return Response({"error": str(exc)}, status=503)
@@ -517,7 +509,7 @@ def _assess_selected_active_tenders(limit: int | None) -> Response:
             try:
                 assessment = _assess_tender(client, tender, company_context)
                 _save_assessment(
-                    ocid, assessment, company_context, tender["updated_at"]
+                    user, ocid, assessment, company_context, tender["updated_at"]
                 )
             except Exception as exc:
                 # Retain successes if one tender has malformed source/model data;
@@ -561,7 +553,7 @@ def assess_active_tenders(request):
             return Response({"error": "limit must be a positive integer"}, status=400)
         if limit < 1:
             return Response({"error": "limit must be a positive integer"}, status=400)
-    return _assess_selected_active_tenders(limit)
+    return _assess_selected_active_tenders(limit, request.user)
 
 
 @csrf_exempt
@@ -590,7 +582,7 @@ def assess_live_trial_tenders(request):
         return Response({"error": "limit must be an integer from 1 to 100"}, status=400)
     if not 1 <= limit <= LIVE_TRIAL_TENDER_LIMIT:
         return Response({"error": "limit must be an integer from 1 to 100"}, status=400)
-    return _assess_selected_active_tenders(limit)
+    return _assess_selected_active_tenders(limit, request.user)
 
 
 @csrf_exempt
@@ -623,7 +615,7 @@ def get_top_assessed_tenders(request):
         return Response({"error": str(exc)}, status=503)
 
     try:
-        assessments = list(TenderAssessment.objects.all())
+        assessments = list(TenderAssessment.objects.filter(user=request.user))
         closing_dates = _load_active_tender_closing_dates(
             connection, [assessment.ocid for assessment in assessments]
         )
@@ -704,7 +696,7 @@ def get_tender_draft(request, ocid):
     """Generate and return a PDF draft proposal for a specific tender using AI."""
     try:
         connection = _open_tender_database()
-        company_context = _read_company_context()
+        company_context = _read_company_context(user)
     except ImproperlyConfigured as exc:
         return Response({"error": str(exc)}, status=503)
 
@@ -718,7 +710,7 @@ def get_tender_draft(request, ocid):
         # Try to get assessment if it exists
         assessment = None
         try:
-            assessment = TenderAssessment.objects.get(ocid=ocid)
+            assessment = TenderAssessment.objects.get(ocid=ocid, user=request.user)
         except TenderAssessment.DoesNotExist:
             pass
 
@@ -799,3 +791,76 @@ def get_tender_draft(request, ocid):
         return Response({"error": "Tender source database is unreadable."}, status=503)
     finally:
         connection.close()
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def generate_business_profile(request):
+    """Takes raw user input, sends to AI to generate markdown profile, and saves."""
+    raw_info = request.data.get("raw_information")
+    if not raw_info:
+        return Response({"error": "raw_information is required"}, status=400)
+    
+    try:
+        client = _get_openai_client()
+    except ImproperlyConfigured as exc:
+        return Response({"error": str(exc)}, status=503)
+        
+    prompt = (
+        "You are an expert business analyst and copywriter. Convert the following raw information "
+        "provided by a company into a highly professional, well-structured Markdown document outlining "
+        "their company description and capabilities. This document will be used as context for bidding on tenders.\n\n"
+        f"Raw Information:\n{raw_info}"
+    )
+    
+    try:
+        ai_response = client.chat.completions.create(
+            model=_assessment_model_name(),
+            messages=[
+                {"role": "system", "content": "You are a professional business writer."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.5
+        )
+        markdown_draft = ai_response.choices[0].message.content
+    except Exception as e:
+        return Response({"error": f"AI generation failed: {str(e)}"}, status=500)
+        
+    profile, created = CompanyProfile.objects.update_or_create(
+        user=request.user,
+        defaults={
+            "raw_information": raw_info,
+            "markdown_context": markdown_draft
+        }
+    )
+    
+    return Response({
+        "message": "Profile generated successfully",
+        "markdown_context": profile.markdown_context
+    }, status=200)
+
+
+@api_view(['GET', 'PUT'])
+@permission_classes([IsAuthenticated])
+def manage_business_profile(request):
+    """Fetch or update the generated markdown context."""
+    if request.method == 'GET':
+        try:
+            profile = request.user.companyprofile
+            return Response({
+                "raw_information": profile.raw_information,
+                "markdown_context": profile.markdown_context
+            })
+        except CompanyProfile.DoesNotExist:
+            return Response({"error": "Profile not found"}, status=404)
+            
+    elif request.method == 'PUT':
+        markdown_context = request.data.get("markdown_context")
+        if not markdown_context:
+            return Response({"error": "markdown_context is required"}, status=400)
+            
+        profile, created = CompanyProfile.objects.update_or_create(
+            user=request.user,
+            defaults={"markdown_context": markdown_context}
+        )
+        return Response({"message": "Profile updated successfully"})
