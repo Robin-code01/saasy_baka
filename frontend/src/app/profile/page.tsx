@@ -496,7 +496,7 @@ export default function Profile() {
     setStatusMessage(null);
 
     try {
-      // 1. Generate the company markdown capabilities specification
+      // 1. Generate the Markdown capability dossier
       const res = await fetch(`${API_BASE_URL}/api/profile/business-info/generate/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -514,7 +514,7 @@ export default function Profile() {
       setMarkdownContext(generated);
       setActiveTab("preview");
 
-      // 2. Assess active tenders against the newly generated capability profile
+      // 2. Assess active tenders against the new profile
       const assessRes = await fetch(`${API_BASE_URL}/api/tenders/assess-active/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -523,23 +523,44 @@ export default function Profile() {
       });
 
       const assessData = await assessRes.json().catch(() => null);
+      console.log("Assess active tenders response:", assessRes.status, assessData);
 
       if (!assessRes.ok) {
-        const assessError =
-          assessData?.error || assessData?.detail || `Status code ${assessRes.status}`;
-        console.warn("Active tender assessment warning:", assessError);
+        const errorMsg =
+          assessData?.error || assessData?.detail || `Endpoint error HTTP ${assessRes.status}`;
+        setStatusMessage({
+          type: "error",
+          text: `Profile generated, but assessment endpoint failed: ${errorMsg}`,
+        });
+        return;
+      }
+
+      // Check the internal counts returned by Django
+      const assessedCount = assessData?.assessed ?? 0;
+      const failedCount = assessData?.failed ?? 0;
+      const selectedCount = assessData?.selected_active_tenders ?? 0;
+      const failureList = assessData?.failures ? Object.values(assessData.failures) : [];
+
+      if (failedCount > 0 && assessedCount === 0) {
+        const firstReason = failureList[0] || "Unknown assessment failure";
+        setStatusMessage({
+          type: "error",
+          text: `Profile saved, but all ${failedCount} tenders failed to assess: "${firstReason}". Check backend .env/API key.`,
+        });
+      } else if (selectedCount === 0) {
         setStatusMessage({
           type: "info",
-          text: `Capability profile generated, but tender assessment encountered an issue: ${assessError}.`,
+          text: "Profile saved, but no active tenders were found in the database to assess.",
+        });
+      } else if (failedCount > 0) {
+        setStatusMessage({
+          type: "info",
+          text: `Profile saved! ${assessedCount} tender(s) assessed (${failedCount} failed). Check the dashboard.`,
         });
       } else {
-        const assessedCount = assessData?.assessed;
         setStatusMessage({
           type: "success",
-          text:
-            typeof assessedCount === "number" && assessedCount > 0
-              ? `AI capability specification generated and ${assessedCount} active tender${assessedCount === 1 ? "" : "s"} assessed! Your matched tenders are ready.`
-              : "AI capability specification generated and active tenders assessed! Your matching criteria is now active.",
+          text: `Profile saved and ${assessedCount} active tender(s) successfully assessed! Click "Go to Matched Tenders" to view them.`,
         });
       }
     } catch (err: unknown) {

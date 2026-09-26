@@ -305,16 +305,27 @@ export default function Dashboard() {
     pdfUrl?: string;
   } | null>(null);
 
+  const [isUsingSample, setIsUsingSample] = React.useState<boolean>(false);
+  const [loadError, setLoadError] = React.useState<string | null>(null);
+
   React.useEffect(() => {
     fetchTenders()
       .then((data) => {
         if (data.length > 0) {
           setTenders(data);
           setSelectedId(data[0].id);
+          setIsUsingSample(false);
+          setLoadError(null);
+        } else {
+          // Backend returned 200 OK, but 0 candidates had valid future closing dates
+          console.warn("top-assessments returned 0 tenders. Using sample tenders.");
+          setIsUsingSample(true);
         }
       })
       .catch((err) => {
-        console.warn("Using sample tenders (backend unreachable):", err);
+        console.warn("fetchTenders failed:", err);
+        setLoadError(err instanceof Error ? err.message : "Failed to load tenders");
+        setIsUsingSample(true);
       })
       .finally(() => setIsLoading(false));
   }, []);
@@ -401,14 +412,19 @@ export default function Dashboard() {
         <div className="grid h-full grid-cols-1 gap-6 overflow-hidden lg:grid-cols-12">
           {/* Left Column: Tenders List */}
           <div className="flex h-full min-h-0 flex-col lg:col-span-5">
-            <div className="mb-3 flex items-center justify-between border-b border-border pb-3">
+          <div className="flex items-center gap-2">
               <span className="text-xs font-bold uppercase tracking-wider text-foreground">
                 Matched Tenders
               </span>
-              {isLoading && (
-                <span className="font-mono text-[11px] font-bold text-stone-600">Loading...</span>
+              {isUsingSample && (
+                <span className="rounded bg-amber-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-amber-900 border border-amber-300">
+                  Demo Mode (Sample Data)
+                </span>
               )}
             </div>
+            {loadError && (
+              <span className="font-mono text-[10px] text-red-600 font-bold">{loadError}</span>
+            )}
 
             <div className="custom-scrollbar flex flex-1 flex-col gap-3 overflow-y-auto pr-1 pb-4">
               {tenders.map((tender) => (
