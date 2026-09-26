@@ -426,9 +426,10 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Right Column: Selected Tender Details */}
+          {/* Right Column: Selected Tender Details with Persistent Action Footer */}
           <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-white shadow-sm lg:col-span-7">
-            <div className="custom-scrollbar flex-1 overflow-y-auto p-6 sm:p-8">
+            {/* Scrollable Review Content */}
+            <div className="custom-scrollbar flex-1 min-h-0 overflow-y-auto p-6 sm:p-8">
               {/* Title */}
               <div>
                 <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl leading-snug">
@@ -532,7 +533,7 @@ export default function Dashboard() {
 
               {/* Attached Documents & Links */}
               {selectedTender.documents && selectedTender.documents.length > 0 && (
-                <div className="mt-8">
+                <div className="mt-8 pb-4">
                   <h2 className="border-b border-border pb-2 text-xs font-bold uppercase tracking-wider text-foreground">
                     Attached Documents & Links
                   </h2>
@@ -572,122 +573,123 @@ export default function Dashboard() {
                   </div>
                 </div>
               )}
-
-              {/* Actions Footer */}
-              <div className="mt-8 border-t border-border pt-5">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    <Button
-                      variant="login"
-                      size="sm"
-                      isLoading={draftingId === selectedTender.id}
-                      onClick={() => handleDraftProposal(selectedTender)}
-                      className="font-mono text-xs whitespace-nowrap shrink-0 transition-all hover:opacity-90 cursor-pointer shadow-xs bg-stone-900 hover:bg-stone-800 text-stone-50"
-                      icon={
-                        <svg
-                          className="mr-1.5 h-3.5 w-3.5 text-amber-400"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z"
-                          />
-                        </svg>
-                      }
-                    >
-                      {draftingId === selectedTender.id
-                        ? "Generating AI Draft..."
-                        : "Draft Proposal"}
-                    </Button>
-
-                    {draftStatus?.id === selectedTender.id &&
-                      draftStatus.type === "success" &&
-                      draftStatus.pdfUrl && (
-                        <a
-                          href={draftStatus.pdfUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 rounded-4xl border border-border bg-white px-3.5 py-1.5 font-mono text-xs font-bold text-foreground shadow-2xs transition hover:border-foreground/60 hover:bg-stone-50"
-                        >
-                          <svg
-                            className="h-3.5 w-3.5 text-stone-600"
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth="2.5"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                            />
-                          </svg>
-                          View in Browser
-                        </a>
-                      )}
-                  </div>
-                </div>
-
-                {/* Warm High-Contrast Feedback Banners */}
-                {draftStatus?.id === selectedTender.id && (
-                  <div
-                    className={cn(
-                      "mt-3 flex items-center justify-between rounded-lg border p-3.5 text-xs font-semibold transition-all",
-                      draftStatus.type === "success"
-                        ? "border-emerald-700 bg-emerald-50 text-emerald-950"
-                        : "border-red-700 bg-red-50 text-red-950"
-                    )}
-                  >
-                    <div className="flex items-center gap-2 font-mono">
-                      {draftStatus.type === "success" ? (
-                        <svg
-                          className="h-4 w-4 shrink-0 text-emerald-800"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M5 13l4 4L19 7"
-                          />
-                        </svg>
-                      ) : (
-                        <svg
-                          className="h-4 w-4 shrink-0 text-red-800"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                          />
-                        </svg>
-                      )}
-                      <span>{draftStatus.message}</span>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setDraftStatus(null)}
-                      className="ml-3 text-xs opacity-75 hover:opacity-100 cursor-pointer"
-                      aria-label="Dismiss message"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                )}
-              </div>
             </div>
+
+            {/* Persistent Action Tray Footer */}
+            <footer className="shrink-0 border-t border-border bg-stone-50/95 px-6 py-4 backdrop-blur-sm sm:px-8">
+              {/* Draft Status Feedback Banner (if active) */}
+              {draftStatus?.id === selectedTender.id && (
+                <div
+                  className={cn(
+                    "mb-3 flex items-center justify-between rounded-lg border p-3 text-xs font-semibold transition-all",
+                    draftStatus.type === "success"
+                      ? "border-emerald-700 bg-emerald-50 text-emerald-950"
+                      : "border-red-700 bg-red-50 text-red-950"
+                  )}
+                >
+                  <div className="flex items-center gap-2 font-mono">
+                    {draftStatus.type === "success" ? (
+                      <svg
+                        className="h-4 w-4 shrink-0 text-emerald-800"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
+                    ) : (
+                      <svg
+                        className="h-4 w-4 shrink-0 text-red-800"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                        />
+                      </svg>
+                    )}
+                    <span>{draftStatus.message}</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setDraftStatus(null)}
+                    className="ml-3 text-xs opacity-75 hover:opacity-100 cursor-pointer"
+                    aria-label="Dismiss message"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
+              {/* Main Action Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <Button
+                    variant="login"
+                    size="sm"
+                    isLoading={draftingId === selectedTender.id}
+                    onClick={() => handleDraftProposal(selectedTender)}
+                    className="font-mono text-xs whitespace-nowrap shrink-0 transition-all hover:opacity-90 cursor-pointer shadow-xs bg-stone-900 hover:bg-stone-800 text-stone-50"
+                    icon={
+                      <svg
+                        className="mr-1.5 h-3.5 w-3.5 text-amber-400"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z"
+                        />
+                      </svg>
+                    }
+                  >
+                    {draftingId === selectedTender.id
+                      ? "Generating AI Draft..."
+                      : "Draft Proposal"}
+                  </Button>
+
+                  {draftStatus?.id === selectedTender.id &&
+                    draftStatus.type === "success" &&
+                    draftStatus.pdfUrl && (
+                      <a
+                        href={draftStatus.pdfUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-4xl border border-border bg-white px-3.5 py-1.5 font-mono text-xs font-bold text-foreground shadow-2xs transition hover:border-foreground/60 hover:bg-stone-50"
+                      >
+                        <svg
+                          className="h-3.5 w-3.5 text-stone-600"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                          />
+                        </svg>
+                        View in Browser
+                      </a>
+                    )}
+                </div>
+              </div>
+            </footer>
           </div>
         </div>
       </main>
