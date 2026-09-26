@@ -98,6 +98,7 @@ export function Header({ companyName = "Proppy", className }: HeaderProps) {
     setError(null);
 
     try {
+      const trimmedUsername = registerUsername.trim();
       const response = await fetch(`${API_BASE_URL}/api/register/`, {
         method: "POST",
         headers: {
@@ -105,7 +106,7 @@ export function Header({ companyName = "Proppy", className }: HeaderProps) {
         },
         credentials: "include",
         body: JSON.stringify({
-          username: registerUsername.trim(),
+          username: trimmedUsername,
           password: registerPassword,
         }),
       });
@@ -124,24 +125,53 @@ export function Header({ companyName = "Proppy", className }: HeaderProps) {
         throw new Error(errorMsg);
       }
 
-      if (data?.token) {
-        localStorage.setItem("authToken", data.token);
-      } else if (data?.access) {
-        localStorage.setItem("accessToken", data.access);
-      }
+      // Automatically log the newly registered user in to establish the session cookie
+      try {
+        const loginRes = await fetch(`${API_BASE_URL}/api/login/`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            username: trimmedUsername,
+            password: registerPassword,
+          }),
+        });
 
-      if (
-        typeof data?.user_id === "number" &&
-        typeof data?.username === "string"
-      ) {
-        saveSession({ user_id: data.user_id, username: data.username });
+        const loginData = await loginRes.json().catch(() => null);
+
+        if (loginData?.token) {
+          localStorage.setItem("authToken", loginData.token);
+        } else if (loginData?.access) {
+          localStorage.setItem("accessToken", loginData.access);
+        }
+
+        const activeUserId = loginData?.user_id ?? data?.user_id;
+        const activeUsername = loginData?.username ?? data?.username;
+
+        if (
+          typeof activeUserId === "number" &&
+          typeof activeUsername === "string"
+        ) {
+          saveSession({ user_id: activeUserId, username: activeUsername });
+        }
+      } catch (loginErr) {
+        console.warn("Auto-login error after registration:", loginErr);
+        if (
+          typeof data?.user_id === "number" &&
+          typeof data?.username === "string"
+        ) {
+          saveSession({ user_id: data.user_id, username: data.username });
+        }
       }
 
       setIsRegisterDialogOpen(false);
       setRegisterUsername("");
       setRegisterPassword("");
 
-      router.push("/dashboard");
+      // Redirect directly to the profile setup page so the company can be set up
+      router.push("/profile");
     } catch (err: unknown) {
       if (err instanceof Error) {
         setError(err.message);
@@ -152,6 +182,7 @@ export function Header({ companyName = "Proppy", className }: HeaderProps) {
       setIsLoading(false);
     }
   };
+
   return (
     <header
       className={cn(
@@ -237,7 +268,7 @@ export function Header({ companyName = "Proppy", className }: HeaderProps) {
                       name="password"
                       type="password"
                       required
-                      autoComplete="current-password"
+                      autoComplete="new-password"
                       value={registerPassword}
                       onChange={(e) => setRegisterPassword(e.target.value)}
                       placeholder="Password"
@@ -293,13 +324,13 @@ export function Header({ companyName = "Proppy", className }: HeaderProps) {
 
                   <div className="flex flex-col gap-1.5 text-left">
                     <label
-                      htmlFor="username"
+                      htmlFor="signin-username"
                       className="text-xs font-medium text-foreground"
                     >
                       Username
                     </label>
                     <input
-                      id="username"
+                      id="signin-username"
                       name="username"
                       type="text"
                       required
@@ -313,13 +344,13 @@ export function Header({ companyName = "Proppy", className }: HeaderProps) {
 
                   <div className="flex flex-col gap-1.5 text-left">
                     <label
-                      htmlFor="password"
+                      htmlFor="signin-password"
                       className="text-xs font-medium text-foreground"
                     >
                       Password
                     </label>
                     <input
-                      id="password"
+                      id="signin-password"
                       name="password"
                       type="password"
                       required
