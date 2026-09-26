@@ -10,7 +10,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
-from core.models import TenderAssessment
+from core.models import CompanyProfile, TenderAssessment
 from core.views import (
     _load_active_tenders,
     assess_active_tenders,
@@ -40,6 +40,10 @@ class AssessActiveTendersTests(TestCase):
         )
         self.settings_override.enable()
         self.user = get_user_model().objects.create_user("tender-tester", password="not-used")
+        CompanyProfile.objects.create(
+            user=self.user,
+            markdown_context="We build accessible software.",
+        )
         self.factory = APIRequestFactory()
 
     def tearDown(self):
@@ -337,6 +341,7 @@ class AssessActiveTendersTests(TestCase):
         connection.close()
 
         assessment_defaults = {
+            "user": self.user,
             "risks": "A test risk.",
             "fit_reasoning": "A test fit reason.",
             "assessment_json": {"test": True},
