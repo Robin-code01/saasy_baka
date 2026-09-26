@@ -6,7 +6,7 @@ import Link from "next/link";
 import { SessionGate } from "@/components/auth/session-gate";
 import { DashboardHeader } from "@/components/layout/dashboard-header/header";
 import { Button } from "@/components/ui/button";
-import { API_BASE_URL } from "@/lib/auth";
+import { API_BASE_URL, getSession } from "@/lib/auth";
 import cn from "@/utils/cn";
 
 interface CompanyFormState {
@@ -54,6 +54,13 @@ const SAMPLE_FORM: CompanyFormState = {
 const FORM_DATA_PREFIX = "<!--proppy-form-data:";
 const FORM_DATA_SUFFIX = ":proppy-form-data-->";
 const LOCAL_STORAGE_KEY = "proppy_company_form_state";
+
+function getUserFormStorageKey(): string {
+  const session = getSession();
+  return session?.user_id
+    ? `${LOCAL_STORAGE_KEY}_${session.user_id}`
+    : LOCAL_STORAGE_KEY;
+}
 
 /**
  * Strips legacy leaked header artifacts that were accidentally appended in previous versions.
@@ -545,12 +552,15 @@ export default function Profile() {
   React.useEffect(() => {
     if (typeof window !== "undefined") {
       try {
-        const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+        const storageKey = getUserFormStorageKey();
+        const cached = localStorage.getItem(storageKey);
         if (cached) {
           const parsed = JSON.parse(cached);
           if (parsed && typeof parsed === "object") {
             setForm((prev) => ({ ...prev, ...parsed }));
           }
+        } else {
+          setForm(INITIAL_FORM);
         }
       } catch {}
     }
@@ -569,17 +579,29 @@ export default function Profile() {
 
         if (res.ok) {
           const data = await res.json();
+          const storageKey = getUserFormStorageKey();
+
           if (data.raw_information) {
             const parsedForm = parseRawInformation(data.raw_information);
             setForm(parsedForm);
             if (typeof window !== "undefined") {
               try {
-                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(parsedForm));
+                localStorage.setItem(storageKey, JSON.stringify(parsedForm));
               } catch {}
             }
+          } else {
+            // New or empty profile: reset to initial if no active draft exists for this specific user
+            const hasDraft =
+              typeof window !== "undefined" && Boolean(localStorage.getItem(storageKey));
+            if (!hasDraft) {
+              setForm(INITIAL_FORM);
+            }
           }
+
           if (data.markdown_context) {
             setMarkdownContext(data.markdown_context);
+          } else {
+            setMarkdownContext("");
           }
         }
       } catch (err) {
@@ -597,10 +619,23 @@ export default function Profile() {
       const next = { ...prev, [field]: value };
       if (typeof window !== "undefined") {
         try {
-          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(next));
+          localStorage.setItem(getUserFormStorageKey(), JSON.stringify(next));
         } catch {}
       }
       return next;
+    });
+  };
+
+  const handleAutoFillExample = () => {
+    setForm(SAMPLE_FORM);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(getUserFormStorageKey(), JSON.stringify(SAMPLE_FORM));
+      } catch {}
+    }
+    setStatusMessage({
+      type: "info",
+      text: "Realistic contractor example inserted. Review or tweak any answers, then click 'Generate AI Capabilities Profile'.",
     });
   };
 
@@ -819,19 +854,6 @@ export default function Profile() {
     void navigator.clipboard.writeText(markdownContext);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleAutoFillExample = () => {
-    setForm(SAMPLE_FORM);
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(SAMPLE_FORM));
-      } catch {}
-    }
-    setStatusMessage({
-      type: "info",
-      text: "Realistic contractor example inserted. Review or tweak any answers, then click 'Generate AI Capabilities Profile'.",
-    });
   };
 
   return (
@@ -1266,18 +1288,6 @@ export default function Profile() {
               ) : markdownContext ? (
                 /* Formatted Preview View */
                 <div className="custom-scrollbar flex-1 min-h-0 overflow-y-auto pr-2">
-                  <div className="mb-3 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab("edit")}
-                      className="inline-flex items-center gap-1 rounded-md border border-border bg-stone-50 px-2.5 py-1 font-mono text-[11px] font-bold text-stone-700 hover:bg-stone-100 hover:text-foreground transition cursor-pointer"
-                    >
-                      <svg className="h-3 w-3 text-stone-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                      Edit Markdown
-                    </button>
-                  </div>
                   <MarkdownViewer content={markdownContext} />
                 </div>
               ) : (
