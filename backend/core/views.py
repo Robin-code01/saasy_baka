@@ -834,7 +834,6 @@ def generate_business_profile(request):
                 {"role": "system", "content": "You are a professional business writer."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.5
         )
         markdown_draft = ai_response.choices[0].message.content
     except Exception:
