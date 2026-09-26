@@ -179,6 +179,7 @@ function compileRawInformation(form: CompanyFormState): string {
   return parts.join("\n\n");
 }
 
+
 /**
  * Built-in dependency-free Markdown viewer for clean display of the generated capability dossier
  */
@@ -495,6 +496,7 @@ export default function Profile() {
     setStatusMessage(null);
 
     try {
+      // 1. Generate the company markdown capabilities specification
       const res = await fetch(`${API_BASE_URL}/api/profile/business-info/generate/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -511,10 +513,35 @@ export default function Profile() {
       const generated = data.markdown_context || "";
       setMarkdownContext(generated);
       setActiveTab("preview");
-      setStatusMessage({
-        type: "success",
-        text: "AI capability specification generated and saved! Your matching criteria is now active.",
+
+      // 2. Assess active tenders against the newly generated capability profile
+      const assessRes = await fetch(`${API_BASE_URL}/api/tenders/assess-active/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ limit: 20 }),
       });
+
+      const assessData = await assessRes.json().catch(() => null);
+
+      if (!assessRes.ok) {
+        const assessError =
+          assessData?.error || assessData?.detail || `Status code ${assessRes.status}`;
+        console.warn("Active tender assessment warning:", assessError);
+        setStatusMessage({
+          type: "info",
+          text: `Capability profile generated, but tender assessment encountered an issue: ${assessError}.`,
+        });
+      } else {
+        const assessedCount = assessData?.assessed;
+        setStatusMessage({
+          type: "success",
+          text:
+            typeof assessedCount === "number" && assessedCount > 0
+              ? `AI capability specification generated and ${assessedCount} active tender${assessedCount === 1 ? "" : "s"} assessed! Your matched tenders are ready.`
+              : "AI capability specification generated and active tenders assessed! Your matching criteria is now active.",
+        });
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "AI generation failed. Please try again.";
       setStatusMessage({
