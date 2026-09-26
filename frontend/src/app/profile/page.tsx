@@ -51,9 +51,72 @@ const SAMPLE_FORM: CompanyFormState = {
     "- No hardware manufacturing or physical cabling installation\n- No legacy mainframe/COBOL systems maintenance\n- No overseas data storage (EEA hosting only)\n- Cannot take on single projects exceeding £3M without joint-venture partners",
 };
 
-function parseRawInformation(text: string): CompanyFormState {
-  if (!text) return INITIAL_FORM;
+const FORM_DATA_PREFIX = "<!--proppy-form-data:";
+const FORM_DATA_SUFFIX = ":proppy-form-data-->";
+const LOCAL_STORAGE_KEY = "proppy_company_form_state";
 
+/**
+ * Strips legacy leaked header artifacts that were accidentally appended in previous versions.
+ */
+function cleanLegacyField(val: string, badPrefixes: string[] = []): string {
+  let cleaned = val.trim();
+  for (const prefix of badPrefixes) {
+    const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(`^(?:#+\\s*|[-*]\\s*)?${escaped}\\s*:?\\s*`, "i");
+    cleaned = cleaned.replace(regex, "").trim();
+  }
+  return cleaned;
+}
+
+/**
+ * Robustly parses saved raw_information without contaminating field values with header text.
+ */
+function parseRawInformation(text: string): CompanyFormState {
+  if (!text || typeof text !== "string") return INITIAL_FORM;
+
+  // 1. Lossless path: extract embedded JSON metadata if present
+  const startIdx = text.indexOf(FORM_DATA_PREFIX);
+  const endIdx = text.indexOf(FORM_DATA_SUFFIX);
+  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    try {
+      const jsonStr = text.substring(startIdx + FORM_DATA_PREFIX.length, endIdx);
+      const parsed = JSON.parse(jsonStr);
+      return {
+        companyName: typeof parsed.companyName === "string" ? parsed.companyName : "",
+        website: typeof parsed.website === "string" ? parsed.website : "",
+        companySize: typeof parsed.companySize === "string" ? parsed.companySize : "",
+        overview: typeof parsed.overview === "string" ? parsed.overview : "",
+        services: typeof parsed.services === "string" ? parsed.services : "",
+        sectors: typeof parsed.sectors === "string" ? parsed.sectors : "",
+        delivery: typeof parsed.delivery === "string" ? parsed.delivery : "",
+        compliance: typeof parsed.compliance === "string" ? parsed.compliance : "",
+        exclusions: typeof parsed.exclusions === "string" ? parsed.exclusions : "",
+      };
+    } catch (e) {
+      console.warn("Could not parse embedded JSON metadata:", e);
+    }
+  }
+
+  // 2. Direct JSON payload fallback
+  const trimmedText = text.trim();
+  if (trimmedText.startsWith("{") && trimmedText.endsWith("}")) {
+    try {
+      const parsed = JSON.parse(trimmedText);
+      return {
+        companyName: typeof parsed.companyName === "string" ? parsed.companyName : "",
+        website: typeof parsed.website === "string" ? parsed.website : "",
+        companySize: typeof parsed.companySize === "string" ? parsed.companySize : "",
+        overview: typeof parsed.overview === "string" ? parsed.overview : "",
+        services: typeof parsed.services === "string" ? parsed.services : "",
+        sectors: typeof parsed.sectors === "string" ? parsed.sectors : "",
+        delivery: typeof parsed.delivery === "string" ? parsed.delivery : "",
+        compliance: typeof parsed.compliance === "string" ? parsed.compliance : "",
+        exclusions: typeof parsed.exclusions === "string" ? parsed.exclusions : "",
+      };
+    } catch {}
+  }
+
+  // 3. Resilient Markdown/KV line parser for legacy data
   const lines = text.split("\n");
   let currentKey: keyof CompanyFormState | null = null;
   const captured: Record<keyof CompanyFormState, string[]> = {
@@ -68,85 +131,118 @@ function parseRawInformation(text: string): CompanyFormState {
     exclusions: [],
   };
 
-  for (const line of lines) {
-    const trimmed = line.trim();
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
     if (!trimmed) continue;
+    if (trimmed.startsWith("<!--") || trimmed.endsWith("-->")) continue;
 
-    const lower = trimmed.toLowerCase();
-
-    if (lower.startsWith("company name:") || lower.startsWith("company:")) {
-      currentKey = "companyName";
-      const val = trimmed.split(/:(.+)/)[1]?.trim();
-      if (val) captured.companyName.push(val);
-    } else if (lower.startsWith("website:") || lower.startsWith("site:")) {
-      currentKey = "website";
-      const val = trimmed.split(/:(.+)/)[1]?.trim();
-      if (val) captured.website.push(val);
-    } else if (
-      lower.startsWith("company size:") ||
-      lower.startsWith("team size:") ||
-      lower.startsWith("headcount:")
-    ) {
-      currentKey = "companySize";
-      const val = trimmed.split(/:(.+)/)[1]?.trim();
-      if (val) captured.companySize.push(val);
-    } else if (lower.includes("overview")) {
+    // Check section boundaries strictly at the start of lines
+    if (/^#{1,3}\s+(company\s+)?overview/i.test(trimmed)) {
       currentKey = "overview";
-      const val = trimmed.replace(/^#+\s*/, "").replace(/^company overview:?/i, "").trim();
-      if (val) captured.overview.push(val);
-    } else if (lower.includes("core service") || lower.includes("services")) {
+      continue;
+    }
+    if (/^#{1,3}\s+(core\s+)?services/i.test(trimmed)) {
       currentKey = "services";
-      const val = trimmed.replace(/^#+\s*/, "").replace(/^core services:?/i, "").trim();
-      if (val) captured.services.push(val);
-    } else if (lower.includes("client sector") || lower.includes("sectors")) {
+      continue;
+    }
+    if (/^#{1,3}\s+(typical\s+)?(client\s+)?sectors/i.test(trimmed)) {
       currentKey = "sectors";
-      const val = trimmed.replace(/^#+\s*/, "").replace(/^typical client sectors:?/i, "").trim();
-      if (val) captured.sectors.push(val);
-    } else if (
-      lower.includes("delivery capabilit") ||
-      lower.includes("supply chain")
-    ) {
+      continue;
+    }
+    if (/^#{1,3}\s+delivery\s+capabilities/i.test(trimmed)) {
       currentKey = "delivery";
-      const val = trimmed.replace(/^#+\s*/, "").replace(/^delivery capabilities:?/i, "").trim();
-      if (val) captured.delivery.push(val);
-    } else if (
-      lower.includes("quality, safety") ||
-      lower.includes("compliance") ||
-      lower.includes("certifications")
+      continue;
+    }
+    if (
+      /^#{1,3}\s+quality(,\s*safety)?(\s*(&|and)\s*compliance)?/i.test(trimmed) ||
+      /^#{1,3}\s+compliance/i.test(trimmed)
     ) {
       currentKey = "compliance";
-      const val = trimmed.replace(/^#+\s*/, "").replace(/^quality and compliance:?/i, "").trim();
-      if (val) captured.compliance.push(val);
-    } else if (
-      lower.includes("constraint") ||
-      lower.includes("exclusion") ||
-      lower.includes("work we do not do")
-    ) {
+      continue;
+    }
+    if (/^#{1,3}\s+constraints/i.test(trimmed) || /^#{1,3}\s+exclusions/i.test(trimmed)) {
       currentKey = "exclusions";
-      const val = trimmed.replace(/^#+\s*/, "").replace(/^constraints and exclusions:?/i, "").trim();
-      if (val) captured.exclusions.push(val);
-    } else if (currentKey) {
+      continue;
+    }
+
+    // Top-level single-line metadata
+    if (/^company\s+name\s*:/i.test(trimmed)) {
+      currentKey = "companyName";
+      const val = trimmed.replace(/^company\s+name\s*:\s*/i, "").trim();
+      if (val) captured.companyName.push(val);
+      continue;
+    }
+    if (/^website\s*:/i.test(trimmed)) {
+      currentKey = "website";
+      let val = trimmed.replace(/^website\s*:\s*/i, "").trim();
+      // Repair legacy bug where "Company Size & Capacity:" was accidentally merged into the website line
+      if (/company\s+size/i.test(val)) {
+        const parts = val.split(/company\s+size(?:\s*&\s*capacity)?\s*:\s*/i);
+        val = parts[0]?.trim() || "";
+        const sizePart = parts[1]?.trim();
+        if (sizePart) captured.companySize.push(sizePart);
+      }
+      if (val) captured.website.push(val);
+      continue;
+    }
+    if (/^(company\s+size(?:\s*&\s*capacity)?|team\s+size|headcount)\s*:/i.test(trimmed)) {
+      currentKey = "companySize";
+      const val = trimmed
+        .replace(/^(company\s+size(?:\s*&\s*capacity)?|team\s+size|headcount)\s*:\s*/i, "")
+        .trim();
+      if (val) captured.companySize.push(val);
+      continue;
+    }
+
+    // Capture content lines
+    if (currentKey) {
+      if (/^#{1,3}\s+/i.test(trimmed)) continue; // ignore stray duplicate header lines
       captured[currentKey].push(trimmed);
-    } else {
+    } else if (!trimmed.startsWith("#")) {
       captured.overview.push(trimmed);
     }
   }
 
   return {
-    companyName: captured.companyName.join(" "),
-    website: captured.website.join(" "),
-    companySize: captured.companySize.join(" "),
-    overview: captured.overview.join("\n"),
-    services: captured.services.join("\n"),
-    sectors: captured.sectors.join("\n"),
-    delivery: captured.delivery.join("\n"),
-    compliance: captured.compliance.join("\n"),
-    exclusions: captured.exclusions.join("\n"),
+    companyName: captured.companyName.join(" ").trim(),
+    website: captured.website.join(" ").trim(),
+    companySize: captured.companySize.join(" ").trim(),
+    overview: cleanLegacyField(captured.overview.join("\n"), ["Company Overview", "Overview"]),
+    services: cleanLegacyField(captured.services.join("\n"), ["Core Services", "Services"]),
+    sectors: cleanLegacyField(captured.sectors.join("\n"), [
+      "Typical Client Sectors",
+      "Client Sectors",
+      "Sectors",
+    ]),
+    delivery: cleanLegacyField(captured.delivery.join("\n"), [
+      "& Supply Chain",
+      "Delivery Capabilities & Supply Chain",
+      "Delivery Capabilities and Supply Chain",
+      "Delivery Capabilities",
+    ]),
+    compliance: cleanLegacyField(captured.compliance.join("\n"), [
+      "Quality, Safety, and Compliance",
+      "Quality, Safety and Compliance",
+      "Quality and Compliance",
+      "Compliance",
+    ]),
+    exclusions: cleanLegacyField(captured.exclusions.join("\n"), [
+      "Constraints & Exclusions",
+      "Constraints and Exclusions",
+      "Constraints",
+      "Exclusions",
+    ]),
   };
 }
 
+/**
+ * Compiles the form with embedded metadata so subsequent loads remain 100% faithful to user inputs.
+ */
 function compileRawInformation(form: CompanyFormState): string {
   const parts: string[] = [];
+
+  // Embed lossless metadata JSON for deterministic reconstruction
+  parts.push(`${FORM_DATA_PREFIX}${JSON.stringify(form)}${FORM_DATA_SUFFIX}`);
 
   if (form.companyName.trim()) {
     parts.push(`Company Name: ${form.companyName.trim()}`);
@@ -179,9 +275,8 @@ function compileRawInformation(form: CompanyFormState): string {
   return parts.join("\n\n");
 }
 
-
 /**
- * Built-in dependency-free Markdown viewer for clean display of the generated capability dossier
+ * Dependency-free Markdown viewer for clean display of the generated capability dossier.
  */
 function MarkdownViewer({ content }: { content: string }) {
   if (!content) return null;
@@ -312,7 +407,6 @@ function MarkdownViewer({ content }: { content: string }) {
   }
 
   flushList("list-end");
-
   return <div className="space-y-1">{elements}</div>;
 }
 
@@ -439,6 +533,7 @@ export default function Profile() {
   const [isLoading, setIsLoading] = React.useState<boolean>(true);
   const [isGenerating, setIsGenerating] = React.useState<boolean>(false);
   const [isSaving, setIsSaving] = React.useState<boolean>(false);
+  const [isReassessing, setIsReassessing] = React.useState<boolean>(false);
   const [activeTab, setActiveTab] = React.useState<"preview" | "edit">("preview");
   const [copied, setCopied] = React.useState<boolean>(false);
   const [statusMessage, setStatusMessage] = React.useState<{
@@ -446,7 +541,22 @@ export default function Profile() {
     text: string;
   } | null>(null);
 
-  // Load existing profile on mount
+  // Initialize cached form from localStorage on mount (instant recovery)
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && typeof parsed === "object") {
+            setForm((prev) => ({ ...prev, ...parsed }));
+          }
+        }
+      } catch {}
+    }
+  }, []);
+
+  // Load existing profile from backend on mount
   React.useEffect(() => {
     async function fetchProfile() {
       setIsLoading(true);
@@ -460,7 +570,13 @@ export default function Profile() {
         if (res.ok) {
           const data = await res.json();
           if (data.raw_information) {
-            setForm(parseRawInformation(data.raw_information));
+            const parsedForm = parseRawInformation(data.raw_information);
+            setForm(parsedForm);
+            if (typeof window !== "undefined") {
+              try {
+                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(parsedForm));
+              } catch {}
+            }
           }
           if (data.markdown_context) {
             setMarkdownContext(data.markdown_context);
@@ -477,7 +593,15 @@ export default function Profile() {
   }, []);
 
   const handleFieldChange = (field: keyof CompanyFormState, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    setForm((prev) => {
+      const next = { ...prev, [field]: value };
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(next));
+        } catch {}
+      }
+      return next;
+    });
   };
 
   const handleGenerate = async (e?: React.FormEvent) => {
@@ -523,7 +647,6 @@ export default function Profile() {
       });
 
       const assessData = await assessRes.json().catch(() => null);
-      console.log("Assess active tenders response:", assessRes.status, assessData);
 
       if (!assessRes.ok) {
         const errorMsg =
@@ -535,7 +658,6 @@ export default function Profile() {
         return;
       }
 
-      // Check the internal counts returned by Django
       const assessedCount = assessData?.assessed ?? 0;
       const failedCount = assessData?.failed ?? 0;
       const selectedCount = assessData?.selected_active_tenders ?? 0;
@@ -545,7 +667,7 @@ export default function Profile() {
         const firstReason = failureList[0] || "Unknown assessment failure";
         setStatusMessage({
           type: "error",
-          text: `Profile saved, but all ${failedCount} tenders failed to assess: "${firstReason}". Check backend .env/API key.`,
+          text: `Profile saved, but tenders failed to assess: "${firstReason}". Check backend .env/API key.`,
         });
       } else if (selectedCount === 0) {
         setStatusMessage({
@@ -560,7 +682,7 @@ export default function Profile() {
       } else {
         setStatusMessage({
           type: "success",
-          text: `Profile saved and ${assessedCount} active tender(s) successfully assessed! Click "Go to Matched Tenders" to view them.`,
+          text: `Profile saved and ${assessedCount} active tender(s) successfully assessed! Click "View Matched Tenders" to see them.`,
         });
       }
     } catch (err: unknown) {
@@ -574,7 +696,10 @@ export default function Profile() {
     }
   };
 
-  const handleSaveMarkdown = async () => {
+  /**
+   * Saves manual markdown changes, with optional immediate tender re-assessment.
+   */
+  const handleSaveMarkdown = async (shouldAssess = false) => {
     if (!markdownContext.trim()) {
       setStatusMessage({
         type: "error",
@@ -600,10 +725,28 @@ export default function Profile() {
         throw new Error(data?.error || "Failed to save capability changes.");
       }
 
-      setStatusMessage({
-        type: "success",
-        text: "Markdown capability profile updated successfully.",
-      });
+      if (shouldAssess) {
+        const assessRes = await fetch(`${API_BASE_URL}/api/tenders/assess-active/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ limit: 20 }),
+        });
+        const assessData = await assessRes.json().catch(() => null);
+        const assessedCount = assessData?.assessed ?? 0;
+
+        setStatusMessage({
+          type: "success",
+          text: `Markdown profile saved and ${assessedCount} active tender(s) re-assessed against your edits!`,
+        });
+      } else {
+        setStatusMessage({
+          type: "success",
+          text: "Markdown capability profile updated successfully.",
+        });
+      }
+
+      setActiveTab("preview");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to update profile.";
       setStatusMessage({
@@ -612,6 +755,49 @@ export default function Profile() {
       });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  /**
+   * Re-evaluates tenders against current markdown context on demand without regenerating text.
+   */
+  const handleReassessOnly = async () => {
+    if (!markdownContext.trim()) {
+      setStatusMessage({
+        type: "error",
+        text: "Please generate or save a capability profile before running tender matching.",
+      });
+      return;
+    }
+
+    setIsReassessing(true);
+    setStatusMessage(null);
+
+    try {
+      const assessRes = await fetch(`${API_BASE_URL}/api/tenders/assess-active/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ limit: 20 }),
+      });
+      const assessData = await assessRes.json().catch(() => null);
+
+      if (!assessRes.ok) {
+        throw new Error(assessData?.error || "Tender matching failed.");
+      }
+
+      const assessedCount = assessData?.assessed ?? 0;
+      setStatusMessage({
+        type: "success",
+        text: `${assessedCount} active tender(s) evaluated against your capability dossier!`,
+      });
+    } catch (err: unknown) {
+      setStatusMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : "Tender matching failed.",
+      });
+    } finally {
+      setIsReassessing(false);
     }
   };
 
@@ -637,6 +823,11 @@ export default function Profile() {
 
   const handleAutoFillExample = () => {
     setForm(SAMPLE_FORM);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(SAMPLE_FORM));
+      } catch {}
+    }
     setStatusMessage({
       type: "info",
       text: "Realistic contractor example inserted. Review or tweak any answers, then click 'Generate AI Capabilities Profile'.",
@@ -669,7 +860,7 @@ export default function Profile() {
               )}
             </div>
             <p className="mt-0.5 text-xs text-foreground/75">
-              Answer the prompt questions below. Proppy's AI bid engine converts them into an audited capability specification.
+              Answer the prompts below or edit your capability dossier directly. Proppy evaluates tender compatibility against your profile.
             </p>
           </div>
 
@@ -737,7 +928,6 @@ export default function Profile() {
         <div className="grid h-full min-h-0 flex-1 grid-cols-1 gap-6 overflow-hidden lg:grid-cols-12">
           {/* Left Column: Structured Guided Questions Form */}
           <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-white shadow-sm lg:col-span-5">
-            {/* Panel Header with Single Auto-fill Example Button */}
             <div className="flex items-center justify-between border-b border-border bg-stone-50/75 px-5 py-3.5 shrink-0">
               <div className="flex items-center gap-2">
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-stone-900 font-mono text-[10px] font-bold text-white">
@@ -815,14 +1005,14 @@ export default function Profile() {
                     Company Overview
                   </label>
                   <p className="mt-0.5 text-[11px] text-stone-500">
-                    Describe your core business, target delivery regions, and typical project size/value you pursue.
+                    Describe your core business, target delivery regions, and typical project sizes.
                   </p>
                   <textarea
                     id="comp-overview"
                     rows={2}
                     value={form.overview}
                     onChange={(e) => handleFieldChange("overview", e.target.value)}
-                    placeholder="e.g. A digital contractor delivering cloud infrastructure and portal software across England & Wales. Typical contract value £100k - £1.5M."
+                    placeholder="e.g. A digital contractor delivering cloud infrastructure and portal software across England & Wales."
                     className="custom-scrollbar mt-1.5 w-full resize-none rounded-lg border border-border bg-stone-50/50 p-2.5 text-xs sm:text-sm text-foreground placeholder:text-stone-400 focus:border-foreground focus:bg-white focus:outline-none transition"
                   />
                 </div>
@@ -833,14 +1023,14 @@ export default function Profile() {
                     Core Services & Capabilities
                   </label>
                   <p className="mt-0.5 text-[11px] text-stone-500">
-                    What specific services do you deliver? (e.g. web portals, accessibility audits, cloud migrations, maintenance).
+                    What specific services do you deliver?
                   </p>
                   <textarea
                     id="comp-services"
                     rows={3}
                     value={form.services}
                     onChange={(e) => handleFieldChange("services", e.target.value)}
-                    placeholder="e.g. WCAG 2.2 AA accessibility audits, public cloud migration (AWS/Azure), citizen self-service portals, 24/7 SLA maintenance"
+                    placeholder="e.g. WCAG 2.2 AA accessibility audits, public cloud migration (AWS/Azure), citizen self-service portals"
                     className="custom-scrollbar mt-1.5 w-full resize-none rounded-lg border border-border bg-stone-50/50 p-2.5 text-xs sm:text-sm text-foreground placeholder:text-stone-400 focus:border-foreground focus:bg-white focus:outline-none transition"
                   />
                 </div>
@@ -851,7 +1041,7 @@ export default function Profile() {
                     Typical Client Sectors
                   </label>
                   <p className="mt-0.5 text-[11px] text-stone-500">
-                    Who do you usually work for? (e.g. local councils, schools, commercial offices, healthcare).
+                    Who do you usually work for? (e.g. councils, NHS trusts, education).
                   </p>
                   <textarea
                     id="comp-sectors"
@@ -869,14 +1059,14 @@ export default function Profile() {
                     Delivery Capabilities & Supply Chain
                   </label>
                   <p className="mt-0.5 text-[11px] text-stone-500">
-                    Describe your project management approach, coordination, and how you source labour or specialist contractors.
+                    Describe your project delivery approach, management, and subcontractors.
                   </p>
                   <textarea
                     id="comp-delivery"
                     rows={2}
                     value={form.delivery}
                     onChange={(e) => handleFieldChange("delivery", e.target.value)}
-                    placeholder="e.g. Agile delivery with certified project managers, in-house technical leads, and vetted UK framework subcontractors"
+                    placeholder="e.g. Agile delivery with certified project managers, in-house technical leads, and vetted subcontractors"
                     className="custom-scrollbar mt-1.5 w-full resize-none rounded-lg border border-border bg-stone-50/50 p-2.5 text-xs sm:text-sm text-foreground placeholder:text-stone-400 focus:border-foreground focus:bg-white focus:outline-none transition"
                   />
                 </div>
@@ -887,7 +1077,7 @@ export default function Profile() {
                     Quality, Safety, and Compliance
                   </label>
                   <p className="mt-0.5 text-[11px] text-stone-500">
-                    What certifications or standards do you hold? (e.g. ISO standards, specific insurances, security clearances).
+                    What certifications or standards do you hold?
                   </p>
                   <textarea
                     id="comp-compliance"
@@ -899,23 +1089,21 @@ export default function Profile() {
                   />
                 </div>
 
-                {/* 7. Constraints & Exclusions (Crucial for AI risk calculation) */}
-                <div className="rounded-lg borderp-3">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-mono text-xs font-bold uppercase tracking-wider text-stone-700">
-                      Constraints & Exclusions
-                    </span>
-                  </div>
+                {/* 7. Constraints & Exclusions */}
+                <div>
+                  <label htmlFor="comp-exclusions" className="block text-xs font-bold uppercase tracking-wider text-stone-700 font-mono">
+                    Constraints & Exclusions
+                  </label>
                   <p className="mt-0.5 text-[11px] text-stone-500">
-                    What kind of work do you NOT do? (e.g. no marine works, no contracts over £3M, no physical hardware cabling). Essential for the AI to accurately evaluate risk!
+                    What kind of work do you NOT do? (Crucial for risk calculation).
                   </p>
                   <textarea
                     id="comp-exclusions"
                     rows={2}
                     value={form.exclusions}
                     onChange={(e) => handleFieldChange("exclusions", e.target.value)}
-                    placeholder="e.g. No projects exceeding £2.5M, no overseas hosting, no hardware/cabling installation, no asbestos work"
-                    className="custom-scrollbar mt-1.5 w-full resize-none rounded-lg border border-border bg-stone-50/50 p-2.5 text-xs sm:text-sm text-foreground placeholder:text-stone-400 focus:border-foreground focus:outline-none transition"
+                    placeholder="e.g. No projects exceeding £2.5M, no overseas hosting, no hardware/cabling installation"
+                    className="custom-scrollbar mt-1.5 w-full resize-none rounded-lg border border-border bg-stone-50/50 p-2.5 text-xs sm:text-sm text-foreground placeholder:text-stone-400 focus:border-foreground focus:bg-white focus:outline-none transition"
                   />
                 </div>
               </div>
@@ -962,70 +1150,70 @@ export default function Profile() {
                 </span>
               </div>
 
-              {markdownContext ? (
-                <div className="flex items-center gap-2">
-                  {/* View/Edit Mode Tabs */}
-                  <div className="inline-flex rounded-lg border border-border bg-white p-0.5 shadow-2xs">
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab("preview")}
-                      className={cn(
-                        "rounded-md px-2.5 py-1 font-mono text-[11px] font-bold transition cursor-pointer",
-                        activeTab === "preview"
-                          ? "bg-stone-900 text-white"
-                          : "text-stone-600 hover:text-foreground"
-                      )}
-                    >
-                      Formatted
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab("edit")}
-                      className={cn(
-                        "rounded-md px-2.5 py-1 font-mono text-[11px] font-bold transition cursor-pointer",
-                        activeTab === "edit"
-                          ? "bg-stone-900 text-white"
-                          : "text-stone-600 hover:text-foreground"
-                      )}
-                    >
-                      Raw Markdown
-                    </button>
-                  </div>
-
-                  {/* Copy Button */}
+              <div className="flex items-center gap-2">
+                {/* Always-accessible View/Edit Mode Tabs */}
+                <div className="inline-flex rounded-lg border border-border bg-white p-0.5 shadow-2xs">
                   <button
                     type="button"
-                    onClick={handleCopy}
-                    className="inline-flex items-center gap-1 rounded-lg border border-border bg-white px-2.5 py-1 font-mono text-[11px] font-bold text-stone-700 shadow-2xs hover:bg-stone-50 cursor-pointer"
-                    title="Copy markdown content"
-                  >
-                    {copied ? (
-                      <span className="text-emerald-700">Copied!</span>
-                    ) : (
-                      <>
-                        <svg className="h-3.5 w-3.5 text-stone-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                          <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-                          <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-                        </svg>
-                        Copy
-                      </>
+                    onClick={() => setActiveTab("preview")}
+                    className={cn(
+                      "rounded-md px-2.5 py-1 font-mono text-[11px] font-bold transition cursor-pointer",
+                      activeTab === "preview"
+                        ? "bg-stone-900 text-white"
+                        : "text-stone-600 hover:text-foreground"
                     )}
+                  >
+                    Preview
                   </button>
-
-                  {/* Download Button */}
                   <button
                     type="button"
-                    onClick={handleDownload}
-                    className="inline-flex items-center gap-1 rounded-lg border border-border bg-white px-2.5 py-1 font-mono text-[11px] font-bold text-stone-700 shadow-2xs hover:bg-stone-50 cursor-pointer"
-                    title="Download as .md file for business use"
+                    onClick={() => setActiveTab("edit")}
+                    className={cn(
+                      "rounded-md px-2.5 py-1 font-mono text-[11px] font-bold transition cursor-pointer",
+                      activeTab === "edit"
+                        ? "bg-stone-900 text-white"
+                        : "text-stone-600 hover:text-foreground"
+                    )}
                   >
-                    <svg className="h-3.5 w-3.5 text-stone-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    Download .md
+                    Edit Markdown
                   </button>
                 </div>
-              ) : null}
+
+                {markdownContext ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleCopy}
+                      className="inline-flex items-center gap-1 rounded-lg border border-border bg-white px-2.5 py-1 font-mono text-[11px] font-bold text-stone-700 shadow-2xs hover:bg-stone-50 cursor-pointer"
+                      title="Copy markdown content"
+                    >
+                      {copied ? (
+                        <span className="text-emerald-700">Copied!</span>
+                      ) : (
+                        <>
+                          <svg className="h-3.5 w-3.5 text-stone-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                            <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                          </svg>
+                          Copy
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleDownload}
+                      className="inline-flex items-center gap-1 rounded-lg border border-border bg-white px-2.5 py-1 font-mono text-[11px] font-bold text-stone-700 shadow-2xs hover:bg-stone-50 cursor-pointer"
+                      title="Download as .md file for business use"
+                    >
+                      <svg className="h-3.5 w-3.5 text-stone-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Download .md
+                    </button>
+                  </>
+                ) : null}
+              </div>
             </div>
 
             {/* Panel Body Content */}
@@ -1034,32 +1222,66 @@ export default function Profile() {
                 <div className="flex h-full items-center justify-center text-xs font-mono font-bold text-stone-500">
                   Loading company profile...
                 </div>
+              ) : activeTab === "edit" ? (
+                /* Editable Markdown View */
+                <div className="flex-1 min-h-0 flex flex-col gap-3">
+                  <div className="flex items-center justify-between text-xs text-stone-600 font-mono">
+                    <span>Direct Markdown Editor</span>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("preview")}
+                      className="text-amber-800 hover:underline cursor-pointer"
+                    >
+                      Switch to Formatted Preview &rarr;
+                    </button>
+                  </div>
+                  <textarea
+                    value={markdownContext}
+                    onChange={(e) => setMarkdownContext(e.target.value)}
+                    placeholder="# Company Name: Acme Ltd&#10;&#10;## Company Overview&#10;Write or paste your company capability profile in Markdown here..."
+                    className="custom-scrollbar flex-1 w-full resize-none rounded-lg border border-border bg-stone-50/50 p-3.5 font-mono text-xs leading-relaxed text-foreground placeholder:text-stone-400 focus:border-foreground focus:bg-white focus:outline-none transition"
+                  />
+                  <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      isLoading={isSaving}
+                      onClick={() => handleSaveMarkdown(false)}
+                      className="font-mono text-xs shadow-2xs cursor-pointer"
+                    >
+                      Save Changes
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      isLoading={isSaving}
+                      onClick={() => handleSaveMarkdown(true)}
+                      className="font-mono text-xs bg-stone-900 hover:bg-stone-800 text-stone-50 shadow-xs cursor-pointer"
+                    >
+                      Save & Re-assess Tenders
+                    </Button>
+                  </div>
+                </div>
               ) : markdownContext ? (
-                activeTab === "preview" ? (
-                  <div className="custom-scrollbar flex-1 min-h-0 overflow-y-auto pr-2">
-                    <MarkdownViewer content={markdownContext} />
+                /* Formatted Preview View */
+                <div className="custom-scrollbar flex-1 min-h-0 overflow-y-auto pr-2">
+                  <div className="mb-3 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("edit")}
+                      className="inline-flex items-center gap-1 rounded-md border border-border bg-stone-50 px-2.5 py-1 font-mono text-[11px] font-bold text-stone-700 hover:bg-stone-100 hover:text-foreground transition cursor-pointer"
+                    >
+                      <svg className="h-3 w-3 text-stone-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Edit Markdown
+                    </button>
                   </div>
-                ) : (
-                  <div className="flex-1 min-h-0 flex flex-col gap-3">
-                    <textarea
-                      value={markdownContext}
-                      onChange={(e) => setMarkdownContext(e.target.value)}
-                      className="custom-scrollbar flex-1 w-full resize-none rounded-lg border border-border bg-stone-50/50 p-3.5 font-mono text-xs leading-relaxed text-foreground placeholder:text-stone-400 focus:border-foreground focus:bg-white focus:outline-none transition"
-                    />
-                    <div className="flex justify-end shrink-0">
-                      <Button
-                        size="sm"
-                        isLoading={isSaving}
-                        onClick={handleSaveMarkdown}
-                        className="font-mono text-xs bg-stone-900 hover:bg-stone-800 text-stone-50 shadow-xs cursor-pointer"
-                      >
-                        {isSaving ? "Saving..." : "Save Markdown Changes"}
-                      </Button>
-                    </div>
-                  </div>
-                )
+                  <MarkdownViewer content={markdownContext} />
+                </div>
               ) : (
-                /* Clean Empty Onboarding State (no duplicate starter template button) */
+                /* Clean Empty State with Direct Create/Paste Action */
                 <div className="flex h-full flex-col items-center justify-center text-center p-6 sm:p-10">
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-stone-100 shadow-2xs">
                     <svg
@@ -1081,16 +1303,25 @@ export default function Profile() {
                   </h3>
                   <p className="mt-1.5 max-w-sm text-xs leading-relaxed text-stone-600">
                     Answer the prompts on the left and click{" "}
-                    <strong className="font-semibold text-foreground">"Generate AI Capabilities Profile"</strong>.
-                    Our AI bid engine will format them into an audited capability specification and activate personalized tender matching.
+                    <strong className="font-semibold text-foreground">"Generate AI Capabilities Profile"</strong>,
+                    or write and paste your own markdown capabilities directly.
                   </p>
+                  <div className="mt-4 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("edit")}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-1.5 font-mono text-xs font-bold text-foreground shadow-2xs transition hover:bg-stone-50 cursor-pointer"
+                    >
+                      Write or Paste Markdown
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
 
             {/* Dossier Footer Call to Action */}
             {markdownContext && (
-              <div className="flex items-center justify-between border-t border-border bg-stone-50/80 px-5 py-3 shrink-0">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-stone-50/80 px-5 py-3 shrink-0">
                 <span className="font-mono text-xs font-semibold text-emerald-800 flex items-center gap-1.5">
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -1098,12 +1329,23 @@ export default function Profile() {
                   Profile active for tender evaluations
                 </span>
 
-                <Link
-                  href="/dashboard"
-                  className="inline-flex items-center gap-1.5 font-mono text-xs font-bold text-stone-900 hover:text-amber-800 transition hover:underline"
-                >
-                  Go to Matched Tenders &rarr;
-                </Link>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleReassessOnly}
+                    disabled={isReassessing}
+                    className="font-mono text-xs font-bold text-stone-600 hover:text-stone-900 transition hover:underline cursor-pointer disabled:opacity-50"
+                  >
+                    {isReassessing ? "Re-evaluating..." : "Re-assess Tenders"}
+                  </button>
+
+                  <Link
+                    href="/dashboard"
+                    className="inline-flex items-center gap-1 font-mono text-xs font-bold text-stone-900 hover:text-amber-800 transition hover:underline"
+                  >
+                    Go to Matched Tenders &rarr;
+                  </Link>
+                </div>
               </div>
             )}
           </div>
