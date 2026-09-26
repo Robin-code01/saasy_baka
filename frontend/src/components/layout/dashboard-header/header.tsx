@@ -38,11 +38,7 @@ export function Header({
 }: HeaderProps) {
   const router = useRouter();
   const [isSigningOut, setIsSigningOut] = React.useState(false);
-  const [username, setUsername] = React.useState<string>(() => {
-    if (propUsername) return propUsername;
-    const session = getSession();
-    return session?.username || "";
-  });
+  const [username, setUsername] = React.useState<string>(propUsername || "");
 
   React.useEffect(() => {
     if (propUsername) {
