@@ -86,7 +86,7 @@ export function Header({
       )}
     >
       <div className="relative mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        {/* Stay on dashboard while logged in */}
+        {/* Navigation Logo Link */}
         <Link href="/dashboard" className="group flex items-center gap-2.5">
           <ProppyLogo />
           <span className="text-xl font-bold tracking-tight text-foreground">
@@ -113,21 +113,61 @@ export function Header({
               </button>
             </DropdownMenuTrigger>
 
-            <DropdownMenuContent className="mt-2 min-w-48 p-2" align="end">
-              {/* Active User Information */}
-              <div className="flex items-center gap-2.5 px-2 py-1.5">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-lightgrey font-mono text-xs font-bold text-foreground">
-                  {userInitial}
-                </span>
-                <div className="flex min-w-0 flex-col">
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-foreground/60">
-                    Signed in as
+            <DropdownMenuContent className="mt-2 min-w-52 p-2" align="end">
+              {/* Single Clickable Profile Action */}
+              <DropdownMenuItem
+                onClick={() => router.push("/profile")}
+                className="group/user flex items-center justify-between gap-2.5 rounded-lg p-2 transition-colors hover:bg-stone-100 focus:bg-stone-100 cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-lightgrey font-mono text-xs font-bold text-foreground transition-colors group-hover/user:bg-stone-300">
+                    {userInitial}
                   </span>
-                  <span className="truncate font-mono text-xs font-semibold text-foreground">
-                    {username || "User"}
-                  </span>
+                  <div className="flex min-w-0 flex-col">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-foreground/60">
+                      Company Profile
+                    </span>
+                    <span className="truncate font-mono text-xs font-semibold text-foreground">
+                      {username || "User"}
+                    </span>
+                  </div>
                 </div>
-              </div>
+                <svg
+                  className="h-3.5 w-3.5 shrink-0 text-stone-400 transition-transform group-hover/user:translate-x-0.5 group-hover/user:text-foreground"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator className="-mx-2 my-1" />
+
+              {/* Matched Tenders Dashboard Link */}
+              <DropdownMenuItem
+                onClick={() => router.push("/dashboard")}
+                className="flex items-center gap-2 px-2 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-lightgrey/60 focus:bg-lightgrey/60 cursor-pointer"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-3.5 w-3.5 text-foreground/60"
+                >
+                  <rect width="7" height="9" x="3" y="3" rx="1" />
+                  <rect width="7" height="5" x="14" y="3" rx="1" />
+                  <rect width="7" height="9" x="14" y="12" rx="1" />
+                  <rect width="7" height="5" x="3" y="16" rx="1" />
+                </svg>
+                <span>Matched Tenders</span>
+              </DropdownMenuItem>
 
               <DropdownMenuSeparator className="-mx-2 my-1" />
 
