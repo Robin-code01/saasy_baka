@@ -1,6 +1,6 @@
 # Generic UK construction company: description and capabilities
 
-Company Name: Balls Builders
+Company Name: BobDaBuilders
 Website: BallsBuilders.com
 
 ## Company overview
