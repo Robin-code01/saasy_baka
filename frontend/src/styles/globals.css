@@ -1,17 +1,23 @@
 @import "tailwindcss";
 
 @theme {
-  --color-background: hsl(214 77% 98%);
-  --color-background-hover: hsl(214 47% 95%);
-  --color-foreground: hsl(0 0% 16%);
+  /* Warm Alabaster Canvas & Crisp White Surfaces */
+  --color-background: hsl(38 24% 96%);
+  --color-background-hover: hsl(38 22% 92%);
+  --color-foreground: hsl(24 20% 10%); /* Deep warm espresso charcoal */
 
-  --color-lightgrey: hsl(214 23% 90%);
-  --color-lightgrey-foreground: hsl(0 0% 16%);
-  --color-lightgrey-hover: hsl(214 23% 86%);
+  --color-card: hsl(0 0% 100%);
+  --color-card-foreground: hsl(24 20% 10%);
 
-  --color-border: hsl(0 0% 87.84%);
-  --color-input: hsl(0 0% 61.96%);
-  --color-ring: hsl(216 51% 44%);
+  /* Warm Linen / Sand Neutrals */
+  --color-lightgrey: hsl(36 18% 90%);
+  --color-lightgrey-foreground: hsl(24 20% 10%);
+  --color-lightgrey-hover: hsl(36 18% 84%);
+
+  /* Defined Warm Stone Borders & Warm Copper/Amber Ring */
+  --color-border: hsl(32 14% 74%);
+  --color-input: hsl(32 14% 64%);
+  --color-ring: hsl(28 90% 40%);
 }
 
 @layer base {
@@ -31,24 +37,21 @@
   }
 }
 
-/* Thin, modern scrollbar */
+/* Warm, high-contrast scrollbar */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 6px; /* Width of the vertical scrollbar */
-  height: 6px; /* Height of the horizontal scrollbar */
+  width: 6px;
+  height: 6px;
 }
 
-/* The background track */
 .custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
 
-/* The draggable scrolling bar */
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #cbd5e1; /* Light slate color (Tailwind slate-300) */
-  border-radius: 9999px; /* Fully rounded edges */
+  background: #a8a29e; /* Warm stone-400 */
+  border-radius: 9999px;
 }
 
-/* Hover effect on the bar */
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8; /* Darker slate on hover (Tailwind slate-400) */
+  background: #78716c; /* Warm stone-500 */
 }

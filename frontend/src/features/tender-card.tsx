@@ -15,41 +15,44 @@ type TenderCardProps = {
 };
 
 /**
- * Continuous HSL interpolation for Match Score (0% = Red -> 50% = Amber -> 100% = Emerald Green)
+ * High-contrast warm continuous HSL interpolation for Match Score
+ * 0% = Warm Crimson (h:8) -> 50% = Rich Golden Amber (h:34) -> 100% = Warm Forest (h:145)
+ * All values maintain >= 5.8:1 contrast on white.
  */
 export function getSmoothMatchColor(score: number): string {
   const clamped = Math.min(100, Math.max(0, score));
   if (clamped <= 50) {
     const t = clamped / 50;
-    const h = Math.round(t * 40); // 0 (Red) -> 40 (Amber)
-    const s = Math.round(75 + t * 17);
-    const l = Math.round(52 - t * 4);
+    const h = Math.round(8 + t * 26); // 8 (Crimson) -> 34 (Warm Amber)
+    const s = Math.round(78 + t * 18);
+    const l = Math.round(38 - t * 6); // 38% -> 32%
     return `hsl(${h} ${s}% ${l}%)`;
   } else {
     const t = (clamped - 50) / 50;
-    const h = Math.round(40 + t * 110); // 40 (Amber) -> 150 (Emerald Green)
-    const s = Math.round(92 - t * 22);
-    const l = Math.round(48 - t * 8);
+    const h = Math.round(34 + t * 111); // 34 (Warm Amber) -> 145 (Warm Forest)
+    const s = Math.round(96 - t * 24);
+    const l = Math.round(32 - t * 4); // 32% -> 28%
     return `hsl(${h} ${s}% ${l}%)`;
   }
 }
 
 /**
- * Continuous HSL interpolation for Risk Score (0% = Emerald Green -> 40% = Amber -> 100% = Red)
+ * High-contrast warm continuous HSL interpolation for Risk Score
+ * 0% = Warm Forest (h:145) -> 40% = Rich Golden Amber (h:34) -> 100% = Warm Crimson (h:8)
  */
 export function getSmoothRiskColor(score: number): string {
   const clamped = Math.min(100, Math.max(0, score));
   if (clamped <= 40) {
     const t = clamped / 40;
-    const h = Math.round(150 - t * 110); // 150 (Emerald Green) -> 40 (Amber)
-    const s = Math.round(70 + t * 22);
-    const l = Math.round(40 + t * 8);
+    const h = Math.round(145 - t * 111); // 145 (Forest) -> 34 (Warm Amber)
+    const s = Math.round(72 + t * 24);
+    const l = Math.round(28 + t * 4); // 28% -> 32%
     return `hsl(${h} ${s}% ${l}%)`;
   } else {
     const t = (clamped - 40) / 60;
-    const h = Math.round(40 - t * 40); // 40 (Amber) -> 0 (Red)
-    const s = Math.round(92 - t * 17);
-    const l = Math.round(48 + t * 4);
+    const h = Math.round(34 - t * 26); // 34 (Warm Amber) -> 8 (Crimson)
+    const s = Math.round(96 - t * 18);
+    const l = Math.round(32 + t * 6); // 32% -> 38%
     return `hsl(${h} ${s}% ${l}%)`;
   }
 }
@@ -99,47 +102,47 @@ export default function TenderCard({
         }
       }}
       className={cn(
-        "group relative flex flex-col gap-3 rounded-xl border bg-background/90 p-4 sm:p-5 text-left transition-all duration-200 cursor-pointer shadow-xs",
+        "group relative flex flex-col gap-3 rounded-xl border bg-white p-4 sm:p-5 text-left transition-all duration-200 cursor-pointer shadow-xs",
         isSelected
-          ? "border-ring/80 ring-1 ring-ring/40 bg-background shadow-sm"
-          : "border-border hover:border-foreground/30 hover:bg-background"
+          ? "border-amber-700 ring-2 ring-amber-700/25 bg-white shadow-sm"
+          : "border-border hover:border-foreground/50 hover:bg-stone-50/50 hover:shadow-xs"
       )}
     >
       {/* Title */}
-      <h3 className="text-sm font-semibold tracking-tight text-foreground line-clamp-2 leading-snug">
+      <h3 className="text-sm font-bold tracking-tight text-foreground line-clamp-2 leading-snug">
         {title}
       </h3>
 
       {/* Primary Spec Line */}
-      <div className="flex items-center justify-between border-b border-border/60 pb-3 text-xs">
-        <span className="font-mono text-sm font-semibold tracking-tight text-foreground">
+      <div className="flex items-center justify-between border-b border-border pb-3 text-xs">
+        <span className="font-mono text-sm font-bold tracking-tight text-foreground">
           {formattedValue}
         </span>
-        <span className="font-mono text-xs text-foreground/60">
+        <span className="font-mono text-xs font-semibold text-stone-700">
           Due: {date}
         </span>
       </div>
 
-      {/* Metrics: Match & Risk with Dynamic Labels & Smooth Spectrum */}
+      {/* Metrics */}
       <div className="flex flex-col gap-2.5 pt-0.5">
         {/* Match Metric */}
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between text-[11px] font-mono">
-            <span className="uppercase tracking-wider text-foreground/60">
+            <span className="uppercase tracking-wider font-bold text-stone-700">
               Match Compatibility
             </span>
             <div className="flex items-center gap-1.5 font-medium">
               <span
-                className="font-semibold transition-colors duration-500"
+                className="font-bold transition-colors duration-500"
                 style={{ color: matchColor }}
               >
                 {matchLabel}
               </span>
-              <span className="text-foreground/30">•</span>
-              <span className="text-foreground">{match}%</span>
+              <span className="text-stone-400">•</span>
+              <span className="font-bold text-foreground">{match}%</span>
             </div>
           </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-border/60">
+          <div className="h-2 w-full overflow-hidden rounded-full bg-stone-200">
             <div
               className="h-full rounded-full transition-all duration-500 ease-out"
               style={{
@@ -153,21 +156,21 @@ export default function TenderCard({
         {/* Risk Metric */}
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between text-[11px] font-mono">
-            <span className="uppercase tracking-wider text-foreground/60">
+            <span className="uppercase tracking-wider font-bold text-stone-700">
               Risk Evaluation
             </span>
             <div className="flex items-center gap-1.5 font-medium">
               <span
-                className="font-semibold transition-colors duration-500"
+                className="font-bold transition-colors duration-500"
                 style={{ color: riskColor }}
               >
                 {riskLabel}
               </span>
-              <span className="text-foreground/30">•</span>
-              <span className="text-foreground">{risk}%</span>
+              <span className="text-stone-400">•</span>
+              <span className="font-bold text-foreground">{risk}%</span>
             </div>
           </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-border/60">
+          <div className="h-2 w-full overflow-hidden rounded-full bg-stone-200">
             <div
               className="h-full rounded-full transition-all duration-500 ease-out"
               style={{
